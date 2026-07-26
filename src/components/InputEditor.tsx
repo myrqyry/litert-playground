@@ -26,9 +26,16 @@ export default function InputEditor({ specs, onChange }: InputEditorProps) {
   const set = (name: string, raw: string) => {
     let val: any = raw
     const spec = specs.find(s => s.name === name)
-    if (spec?.dtype === 'float32') {
+    const isArray = spec && (spec.shape.length > 1 || spec.shape[0] > 1)
+    if (isArray) {
+      try {
+        val = JSON.parse(raw)
+      } catch {
+        // keep raw string while user is typing invalid JSON
+      }
+    } else if (spec?.dtype === 'float32') {
       val = parseFloat(raw)
-      if (spec.constraints) {
+      if (!isNaN(val) && spec.constraints) {
         if (spec.constraints.min !== undefined) val = Math.max(spec.constraints.min, val)
         if (spec.constraints.max !== undefined) val = Math.min(spec.constraints.max, val)
       }

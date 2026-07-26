@@ -1,4 +1,4 @@
-import { loadAndCompile, CompiledModel, Tensor } from '@litertjs/core'
+import { loadLiteRt, loadAndCompile, CompiledModel, Tensor } from '@litertjs/core'
 import { BPETokenizer } from './tokenizer'
 import { Talker } from './talker'
 import { MTP } from './mtp'
@@ -74,6 +74,7 @@ export class Qwen3TtsPipeline {
   onProgress?: (progress: TTSProgress) => void
 
   async load(): Promise<void> {
+    await loadLiteRt('https://cdn.jsdelivr.net/npm/@litertjs/core/wasm/', { jspi: true })
     this.onProgress?.({ phase: 'loading', step: 0, total: 7 })
     const base = this.modelDir
 

@@ -37,7 +37,10 @@ function topKFilter(logits: Float32Array, k: number): Float32Array {
 
 function softmax(logits: Float32Array): Float32Array {
   const out = new Float32Array(logits)
-  const maxVal = Math.max(...out)
+  let maxVal = -Infinity
+  for (let i = 0; i < out.length; i++) {
+    if (out[i] > maxVal) maxVal = out[i]
+  }
   let sum = 0
   for (let i = 0; i < out.length; i++) {
     if (out[i] > -Infinity) {

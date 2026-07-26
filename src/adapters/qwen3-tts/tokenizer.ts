@@ -29,6 +29,7 @@ export class BPETokenizer {
       }
       if (matched) continue
 
+      this.pat.lastIndex = 0
       const m = this.pat.exec(remaining)
       if (!m) break
       const word = m[0]
