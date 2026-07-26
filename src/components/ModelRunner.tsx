@@ -7,14 +7,20 @@ import OutputViewer from './OutputViewer'
 
 interface ModelRunnerProps {
   adapters: ModelAdapter[]
+  selectedId?: string | null
+  onSelect?: (id: string | null) => void
 }
 
-export default function ModelRunner({ adapters }: ModelRunnerProps) {
+export default function ModelRunner({ adapters, selectedId: externalId, onSelect }: ModelRunnerProps) {
   const { loadModel, runInference, outputs, error, loading, loaded } = useModelRunner()
   const [selectedAdapter, setSelectedAdapter] = useState<ModelAdapter | null>(null)
   const [inputValues, setInputValues] = useState<Record<string, any>>({})
 
   const handleSelect = (adapter: ModelAdapter) => {
+    if (onSelect && (adapter as any).isPipeline) {
+      onSelect(adapter.modelId)
+      return
+    }
     setSelectedAdapter(adapter)
     setInputValues({})
     loadModel(adapter)
