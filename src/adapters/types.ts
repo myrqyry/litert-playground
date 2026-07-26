@@ -23,7 +23,6 @@ export interface ModelAdapter {
   metadata: ModelMetadata
   inputSpecs: TensorSpec[]
   outputSpecs: TensorSpec[]
-  load(model: import('@litertjs/core').LiteRtModel): Promise<void>
-  applyInputs(values: Record<string, any>, session: import('@litertjs/core').LiteRtSession): Promise<void>
-  parseOutputs(session: import('@litertjs/core').LiteRtSession): Promise<Record<string, any>>
+  prepareInputs(values: Record<string, any>): Record<string, import('@litertjs/core').Tensor>
+  parseOutputs(outputs: Record<string, import('@litertjs/core').Tensor>): Promise<Record<string, any>>
 }

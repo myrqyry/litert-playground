@@ -43,8 +43,7 @@ describe('ModelAdapter interface', () => {
       metadata: { name: 'Test', description: '', modelPath: '', tags: [] },
       inputSpecs: [],
       outputSpecs: [],
-      load: async () => {},
-      applyInputs: async () => {},
+      prepareInputs: () => ({}),
       parseOutputs: async () => ({})
     }
     expect(adapter.modelId).toBe('test')
