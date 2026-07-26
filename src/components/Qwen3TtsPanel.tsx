@@ -10,16 +10,20 @@ export function Qwen3TtsPanel() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [status, setStatus] = useState('Not loaded')
 
+  const [error, setError] = useState<string | null>(null)
+
   useEffect(() => {
-    if (pipeline) return
+    if (pipeline?.ready) { setStatus('Ready'); return }
+    if (pipeline && !pipeline.ready) { pipeline = null }
     setStatus('Loading...')
+    setError(null)
     const p = new Qwen3TtsPipeline('/models/qwen3-tts')
     p.onProgress = (pr: TTSProgress) => {
       setProgress(`${pr.phase} ${pr.step}/${pr.total}`)
     }
     p.load()
-      .then(() => { pipeline = p; setStatus('Ready') })
-      .catch((e: unknown) => setStatus(`Error: ${e}`))
+      .then(() => { pipeline = p; setStatus('Ready'); setError(null) })
+      .catch((e: unknown) => { setStatus('Load failed'); setError(String(e)) })
   }, [])
 
   const handleGenerate = async () => {
@@ -39,9 +43,23 @@ export function Qwen3TtsPanel() {
     setGenerating(false)
   }
 
+  const handleRetry = () => {
+    pipeline = null
+    setStatus('Not loaded')
+    setError(null)
+    setProgress('')
+    window.location.reload()
+  }
+
   return (
     <div className="space-y-4">
       <div className="text-sm text-on-surface-variant">Status: {status}</div>
+      {error && (
+        <div className="rounded-lg bg-error-container p-3 text-sm text-on-error-container">
+          {error}
+          <button onClick={handleRetry} className="ml-3 underline">Retry</button>
+        </div>
+      )}
       <textarea
         className="h-24 w-full rounded-lg border border-outline bg-surface-container p-3 font-mono text-sm text-on-surface transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none"
         value={text}

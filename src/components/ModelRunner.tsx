@@ -7,7 +7,13 @@ import ImageInput from './ImageInput'
 import OutputViewer from './OutputViewer'
 
 function isVisionSpec(spec: TensorSpec): boolean {
-  return spec.shape.length === 4 && spec.shape[2] > 4 && spec.shape[3] > 4
+  const s = spec.shape
+  if (s.length !== 4) return false
+  // NCHW: [B, C, H, W] with both spatial dims > 4
+  if (s[2] > 4 && s[3] > 4) return true
+  // NHWC: [B, H, W, C] with both spatial dims > 4 and channels in [1..4]
+  if (s[1] > 4 && s[2] > 4 && s[3] >= 1 && s[3] <= 4) return true
+  return false
 }
 
 interface ModelRunnerProps {

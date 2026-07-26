@@ -54,6 +54,7 @@ const LANGUAGE_IDS: Record<string, number> = {
 export class Qwen3TtsPipeline {
   tokenizer: BPETokenizer | null = null
 
+  ready = false
   private talkerModel: CompiledModel | null = null
   private mtpModel: CompiledModel | null = null
   private codecModel: CompiledModel | null = null
@@ -114,6 +115,7 @@ export class Qwen3TtsPipeline {
     })
     this.codec = new CodecDecoder(codecModel)
     this.onProgress?.({ phase: 'loading', step: 7, total: 7 })
+    this.ready = true
   }
 
   async synthesize(text: string, config?: TTSConfig): Promise<Float32Array> {
