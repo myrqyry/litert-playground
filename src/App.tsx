@@ -1,5 +1,6 @@
-function App() {
-  return <h1>LiteRT Playground</h1>
-}
+import ModelRunner from './components/ModelRunner'
+import { registeredAdapters } from './adapters/magenta'
 
-export default App
+export default function App() {
+  return <ModelRunner adapters={registeredAdapters} />
+}

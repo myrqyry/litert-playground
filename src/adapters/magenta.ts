@@ -83,6 +83,8 @@ export const magentaAdapter: ModelAdapter = {
   }
 }
 
+export const registeredAdapters: ModelAdapter[] = [magentaAdapter]
+
 function toNestedArray(flat: Float32Array, dims: number[]): any {
   if (dims.length === 0) return flat[0]
   const size = dims[0]
