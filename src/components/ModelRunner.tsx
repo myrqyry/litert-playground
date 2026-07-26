@@ -1,9 +1,14 @@
 import { useState } from 'react'
 import { useModelRunner } from '../hooks/useModelRunner'
-import type { ModelAdapter } from '../adapters/types'
+import type { ModelAdapter, TensorSpec } from '../adapters/types'
 import ModelSelector from './ModelSelector'
 import InputEditor from './InputEditor'
+import ImageInput from './ImageInput'
 import OutputViewer from './OutputViewer'
+
+function isVisionSpec(spec: TensorSpec): boolean {
+  return spec.shape.length === 4 && spec.shape[2] > 4 && spec.shape[3] > 4
+}
 
 interface ModelRunnerProps {
   adapters: ModelAdapter[]
@@ -43,7 +48,11 @@ export default function ModelRunner({ adapters, onSelect }: ModelRunnerProps) {
 
         {selectedAdapter && loaded && (
           <div className="mt-6 space-y-6">
-            <InputEditor specs={selectedAdapter.inputSpecs} onChange={setInputValues} />
+            {selectedAdapter.inputSpecs.some(isVisionSpec) ? (
+              <ImageInput specs={selectedAdapter.inputSpecs} onChange={setInputValues} />
+            ) : (
+              <InputEditor specs={selectedAdapter.inputSpecs} onChange={setInputValues} />
+            )}
 
             <button
               onClick={handleRun}

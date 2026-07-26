@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
-import { loadLiteRt, loadAndCompile } from '@litertjs/core'
+import { loadLiteRt, loadAndCompile, Tensor } from '@litertjs/core'
 import type { ModelAdapter } from '../adapters/types'
 
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@litertjs/core/wasm/'
@@ -52,7 +52,14 @@ export function useModelRunner(): UseModelRunnerReturn {
     setLoading(true)
     setError(null)
     try {
-      const inputs = adapterRef.current.prepareInputs(values)
+      let inputs = adapterRef.current.prepareInputs(values)
+      if (!Object.keys(inputs).length && Object.keys(values).length) {
+        inputs = {}
+        for (const spec of adapterRef.current.inputSpecs) {
+          const v = values[spec.name]
+          if (v instanceof Float32Array) inputs[spec.name] = new Tensor(v, spec.shape)
+        }
+      }
       const result = await modelRef.current.run(inputs)
       const parsed = await adapterRef.current.parseOutputs(result)
       setOutputs(parsed)
