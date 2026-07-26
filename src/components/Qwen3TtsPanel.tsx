@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Qwen3TtsPipeline, TTSProgress } from '../adapters/qwen3-tts/pipeline'
+import { Qwen3TtsPipeline, TTSProgress, TTSConfig } from '../adapters/qwen3-tts/pipeline'
 
 let pipeline: Qwen3TtsPipeline | null = null
 
@@ -9,8 +9,17 @@ export function Qwen3TtsPanel() {
   const [progress, setProgress] = useState('')
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [status, setStatus] = useState('Not loaded')
-
   const [error, setError] = useState<string | null>(null)
+  const [cfg, setCfg] = useState<TTSConfig>({
+    temperature: 0.85,
+    topK: 25,
+    repetitionPenalty: 1.05,
+    voice: 'demo_speaker',
+    maxFrames: 512,
+    language: 'english'
+  })
+
+  const updateCfg = (updater: (prev: TTSConfig) => TTSConfig) => setCfg(updater)
 
   useEffect(() => {
     if (pipeline?.ready) { setStatus('Ready'); return }
@@ -32,7 +41,7 @@ export function Qwen3TtsPanel() {
     setAudioUrl(null)
     try {
       setProgress('Generating...')
-      const audio = await pipeline.synthesize(text)
+      const audio = await pipeline.synthesize(text, cfg)
       const wav = encodeWav(audio, 24000)
       const url = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }))
       setAudioUrl(url)
@@ -53,7 +62,74 @@ export function Qwen3TtsPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="text-sm text-on-surface-variant">Status: {status}</div>
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-on-surface-variant">Status: {status}</div>
+        <div className="flex gap-2">
+          <select
+            className="rounded-lg border border-outline bg-surface-container px-2 py-1 text-xs text-on-surface"
+            value={cfg.language}
+            onChange={e => updateCfg(c => ({ ...c, language: e.target.value }))}
+          >
+            <option value="english">English</option>
+            <option value="chinese">Chinese</option>
+            <option value="japanese">Japanese</option>
+            <option value="korean">Korean</option>
+            <option value="german">German</option>
+            <option value="french">French</option>
+            <option value="spanish">Spanish</option>
+            <option value="italian">Italian</option>
+            <option value="portuguese">Portuguese</option>
+            <option value="russian">Russian</option>
+          </select>
+          <select
+            className="rounded-lg border border-outline bg-surface-container px-2 py-1 text-xs text-on-surface"
+            value={cfg.voice}
+            onChange={e => updateCfg(c => ({ ...c, voice: e.target.value }))}
+          >
+            <option value="demo_speaker">Demo Speaker</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 rounded-xl bg-surface-container-low p-3 text-xs">
+        <div>
+          <label className="mb-1 block text-on-surface-variant">Temperature ({cfg.temperature})</label>
+          <input
+            type="range" min="0.1" max="2.0" step="0.05"
+            value={cfg.temperature}
+            onChange={e => updateCfg(c => ({ ...c, temperature: parseFloat(e.target.value) }))}
+            className="w-full accent-primary"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-on-surface-variant">Top-K ({cfg.topK})</label>
+          <input
+            type="number" min="1" max="100"
+            value={cfg.topK}
+            onChange={e => updateCfg(c => ({ ...c, topK: parseInt(e.target.value) || 25 }))}
+            className="w-full rounded border border-outline bg-surface px-2 py-1 text-on-surface"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-on-surface-variant">Repetition Penalty ({cfg.repetitionPenalty})</label>
+          <input
+            type="range" min="1.0" max="2.0" step="0.01"
+            value={cfg.repetitionPenalty}
+            onChange={e => updateCfg(c => ({ ...c, repetitionPenalty: parseFloat(e.target.value) }))}
+            className="w-full accent-primary"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-on-surface-variant">Max Frames ({cfg.maxFrames})</label>
+          <input
+            type="number" min="64" max="2048" step="64"
+            value={cfg.maxFrames}
+            onChange={e => updateCfg(c => ({ ...c, maxFrames: parseInt(e.target.value) || 512 }))}
+            className="w-full rounded border border-outline bg-surface px-2 py-1 text-on-surface"
+          />
+        </div>
+      </div>
+
       {error && (
         <div className="rounded-lg bg-error-container p-3 text-sm text-on-error-container">
           {error}
