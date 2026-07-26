@@ -9,24 +9,24 @@ interface ModelSelectorProps {
 export default function ModelSelector({ adapters, onSelect, disabled }: ModelSelectorProps) {
   return (
     <div>
-      <h2>Model</h2>
+      <h2 className="mb-2 text-sm font-semibold text-on-surface-variant uppercase tracking-wide">Model</h2>
       <select
         onChange={e => {
           const a = adapters.find(a => a.modelId === e.target.value)
           if (a) onSelect(a)
         }}
         disabled={disabled}
-        style={{ width: '100%', padding: 8 }}
+        className="w-full rounded-lg border border-outline bg-surface-container px-4 py-3 text-on-surface transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none disabled:opacity-50"
       >
-        <option value="">-- Select a model --</option>
+        <option value="" className="bg-surface-dim">-- Select a model --</option>
         {adapters.map(a => (
-          <option key={a.modelId} value={a.modelId}>
+          <option key={a.modelId} value={a.modelId} className="bg-surface-dim">
             {a.metadata.name}
           </option>
         ))}
       </select>
       {adapters.length === 0 && (
-        <p style={{ color: '#999', fontSize: '0.85em' }}>No models registered yet</p>
+        <p className="mt-1 text-sm text-on-surface-variant">No models registered yet</p>
       )}
     </div>
   )

@@ -4,18 +4,20 @@ interface OutputViewerProps {
 
 export default function OutputViewer({ outputs }: OutputViewerProps) {
   if (!outputs) {
-    return <div><h2>Outputs</h2><p style={{ color: '#999' }}>Run inference to see results</p></div>
+    return (
+      <div>
+        <h2 className="mb-2 text-sm font-semibold text-on-surface-variant uppercase tracking-wide">Outputs</h2>
+        <p className="text-sm text-on-surface-variant">Run inference to see results</p>
+      </div>
+    )
   }
   return (
     <div>
-      <h2>Outputs</h2>
+      <h2 className="mb-3 text-sm font-semibold text-on-surface-variant uppercase tracking-wide">Outputs</h2>
       {Object.entries(outputs).map(([key, value]) => (
-        <div key={key} style={{ marginBottom: 12 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>{key}</div>
-          <pre style={{
-            background: '#f5f5f5', padding: 8, borderRadius: 4,
-            overflowX: 'auto', fontSize: '0.85em', maxHeight: 200, overflowY: 'auto'
-          }}>
+        <div key={key} className="mb-4">
+          <div className="mb-1 text-sm font-semibold text-on-surface">{key}</div>
+          <pre className="max-h-48 overflow-auto rounded-lg bg-surface-container px-4 py-3 font-mono text-xs text-on-surface [scrollbar-width:thin]">
             {JSON.stringify(value, null, 2)}
           </pre>
         </div>

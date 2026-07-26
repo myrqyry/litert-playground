@@ -11,8 +11,6 @@ function defaultValues(specs: TensorSpec[]): Record<string, any> {
   for (const spec of specs) {
     if (spec.constraints?.enum) {
       v[spec.name] = spec.constraints.enum[0]
-    } else if (spec.dtype === 'float32') {
-      v[spec.name] = 0
     } else {
       v[spec.name] = 0
     }
@@ -40,24 +38,24 @@ export default function InputEditor({ specs, onChange }: InputEditorProps) {
 
   return (
     <div>
-      <h2>Inputs</h2>
+      <h2 className="mb-3 text-sm font-semibold text-on-surface-variant uppercase tracking-wide">Inputs</h2>
       {specs.map(spec => (
-        <div key={spec.name} style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontWeight: 600, marginBottom: 4 }}>
+        <div key={spec.name} className="mb-4">
+          <label className="mb-1 block text-sm font-semibold text-on-surface">
             {spec.name}
-            <span style={{ fontWeight: 400, fontSize: '0.85em', color: '#666', marginLeft: 8 }}>
+            <span className="ml-2 text-xs font-normal text-on-surface-variant">
               {spec.dtype} {JSON.stringify(spec.shape)}
             </span>
           </label>
-          <div style={{ fontSize: '0.85em', color: '#555', marginBottom: 4 }}>{spec.description}</div>
+          <p className="mb-1 text-xs text-on-surface-variant">{spec.description}</p>
           {spec.constraints?.enum ? (
             <select
               value={String(values[spec.name] ?? '')}
               onChange={e => set(spec.name, e.target.value)}
-              style={{ width: '100%', padding: 6 }}
+              className="w-full rounded-lg border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none"
             >
               {spec.constraints.enum.map((opt, i) => (
-                <option key={i} value={opt}>
+                <option key={i} value={opt} className="bg-surface-dim">
                   {spec.constraints?.items?.[i] ?? opt}
                 </option>
               ))}
@@ -67,7 +65,7 @@ export default function InputEditor({ specs, onChange }: InputEditorProps) {
               defaultValue={JSON.stringify(values[spec.name] ?? defaultValues([spec])[spec.name])}
               onChange={e => set(spec.name, e.target.value)}
               rows={4}
-              style={{ width: '100%', fontFamily: 'monospace', padding: 6 }}
+              className="w-full rounded-lg border border-outline bg-surface-container px-3 py-2 font-mono text-sm text-on-surface transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none"
             />
           ) : (
             <input
@@ -75,7 +73,7 @@ export default function InputEditor({ specs, onChange }: InputEditorProps) {
               step={spec.dtype === 'float32' ? 'any' : '1'}
               value={Number(values[spec.name] ?? 0)}
               onChange={e => set(spec.name, e.target.value)}
-              style={{ width: '100%', padding: 6 }}
+              className="w-full rounded-lg border border-outline bg-surface-container px-3 py-2 text-sm text-on-surface transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none"
             />
           )}
         </div>

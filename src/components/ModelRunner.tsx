@@ -11,7 +11,7 @@ interface ModelRunnerProps {
   onSelect?: (id: string | null) => void
 }
 
-export default function ModelRunner({ adapters, selectedId: externalId, onSelect }: ModelRunnerProps) {
+export default function ModelRunner({ adapters, onSelect }: ModelRunnerProps) {
   const { loadModel, runInference, outputs, error, loading, loaded } = useModelRunner()
   const [selectedAdapter, setSelectedAdapter] = useState<ModelAdapter | null>(null)
   const [inputValues, setInputValues] = useState<Record<string, any>>({})
@@ -26,41 +26,42 @@ export default function ModelRunner({ adapters, selectedId: externalId, onSelect
     loadModel(adapter)
   }
 
-  const handleRun = () => {
-    runInference(inputValues)
-  }
+  const handleRun = () => runInference(inputValues)
 
   return (
-    <div style={{ maxWidth: 800, margin: 'auto', padding: 20 }}>
-      <h1>LiteRT Playground</h1>
+    <div className="min-h-screen bg-surface-dim">
+      <div className="mx-auto p-6" style={{ maxWidth: 800 }}>
+        <h1 className="mb-6 text-3xl font-bold text-on-surface">LiteRT Playground</h1>
 
-      <ModelSelector adapters={adapters} onSelect={handleSelect} disabled={loading} />
+        <ModelSelector adapters={adapters} onSelect={handleSelect} disabled={loading} />
 
-      {error && (
-        <div style={{ color: '#d32f2f', background: '#ffebee', padding: 8, borderRadius: 4, marginTop: 12 }}>
-          {error}
-        </div>
-      )}
+        {error && (
+          <div className="mt-3 rounded-lg bg-error-container p-3 text-sm text-on-error-container">
+            {error}
+          </div>
+        )}
 
-      {selectedAdapter && loaded && (
-        <>
-          <InputEditor specs={selectedAdapter.inputSpecs} onChange={setInputValues} />
+        {selectedAdapter && loaded && (
+          <div className="mt-6 space-y-6">
+            <InputEditor specs={selectedAdapter.inputSpecs} onChange={setInputValues} />
 
-          <button
-            onClick={handleRun}
-            disabled={loading}
-            style={{ marginTop: 16, padding: '10px 24px', fontSize: 16, cursor: loading ? 'wait' : 'pointer' }}
-          >
-            {loading ? 'Running...' : 'Run Inference'}
-          </button>
+            <button
+              onClick={handleRun}
+              disabled={loading}
+              className="inline-flex items-center justify-center rounded-full bg-primary px-8 py-3 text-sm font-medium text-on-primary shadow-md transition-all duration-300 hover:scale-[1.02] hover:shadow-lg active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
+              style={{ transitionTimingFunction: 'var(--ease-spring)' }}
+            >
+              {loading ? 'Running...' : 'Run Inference'}
+            </button>
 
-          <OutputViewer outputs={outputs} />
-        </>
-      )}
+            <OutputViewer outputs={outputs} />
+          </div>
+        )}
 
-      {selectedAdapter && !loaded && loading && (
-        <p style={{ color: '#666', marginTop: 12 }}>Loading model...</p>
-      )}
+        {selectedAdapter && !loaded && loading && (
+          <p className="mt-3 text-on-surface-variant">Loading model...</p>
+        )}
+      </div>
     </div>
   )
 }

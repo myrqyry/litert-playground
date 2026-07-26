@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: oklch(0.72 0.14 330);
+  --color-on-primary: oklch(0.22 0.08 330);
+  --color-primary-container: oklch(0.3 0.1 330);
+  --color-on-primary-container: oklch(0.85 0.06 330);
+
+  --color-secondary: oklch(0.72 0.08 170);
+  --color-on-secondary: oklch(0.22 0.04 170);
+  --color-secondary-container: oklch(0.3 0.06 170);
+  --color-on-secondary-container: oklch(0.85 0.04 170);
+
+  --color-tertiary: oklch(0.78 0.08 60);
+  --color-on-tertiary: oklch(0.28 0.04 60);
+
+  --color-surface: oklch(0.14 0.02 300);
+  --color-surface-dim: oklch(0.12 0.02 300);
+  --color-surface-bright: oklch(0.22 0.02 300);
+  --color-surface-container: oklch(0.18 0.02 300);
+  --color-surface-container-low: oklch(0.16 0.02 300);
+  --color-surface-container-high: oklch(0.22 0.02 300);
+  --color-on-surface: oklch(0.92 0.01 300);
+  --color-on-surface-variant: oklch(0.7 0.02 300);
+
+  --color-outline: oklch(0.55 0.02 300);
+  --color-outline-variant: oklch(0.3 0.02 300);
+
+  --color-error: oklch(0.72 0.15 30);
+  --color-on-error: oklch(0.22 0.08 30);
+  --color-error-container: oklch(0.3 0.1 30);
+  --color-on-error-container: oklch(0.85 0.06 30);
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-full: 9999px;
+
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-spring-soft: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+}
+
+html {
+  background-color: var(--color-surface-dim);
+  color: var(--color-on-surface);
+}

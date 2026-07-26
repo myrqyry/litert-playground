@@ -40,23 +40,26 @@ export function Qwen3TtsPanel() {
   }
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="text-sm text-gray-500">Status: {status}</div>
+    <div className="space-y-4">
+      <div className="text-sm text-on-surface-variant">Status: {status}</div>
       <textarea
-        className="w-full h-24 border rounded p-2 font-mono text-sm"
+        className="h-24 w-full rounded-lg border border-outline bg-surface-container p-3 font-mono text-sm text-on-surface transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none"
         value={text}
         onChange={e => setText(e.target.value)}
         placeholder="Enter text to synthesize..."
       />
       <button
-        className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+        className="inline-flex items-center justify-center rounded-full bg-primary px-8 py-3 text-sm font-medium text-on-primary shadow-md transition-all duration-300 hover:scale-[1.02] hover:shadow-lg active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
+        style={{ transitionTimingFunction: 'var(--ease-spring)' }}
         onClick={handleGenerate}
         disabled={generating || status !== 'Ready'}
       >
         {generating ? 'Generating...' : 'Generate Speech'}
       </button>
-      {progress && <div className="text-xs text-gray-400">{progress}</div>}
-      {audioUrl && <audio controls src={audioUrl} className="w-full" />}
+      {progress && <div className="text-xs text-on-surface-variant">{progress}</div>}
+      {audioUrl && (
+        <audio controls src={audioUrl} className="w-full" />
+      )}
     </div>
   )
 }
