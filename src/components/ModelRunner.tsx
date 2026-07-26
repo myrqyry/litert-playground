@@ -17,7 +17,7 @@ interface ModelRunnerProps {
 }
 
 export default function ModelRunner({ adapters, onSelect }: ModelRunnerProps) {
-  const { loadModel, runInference, outputs, error, loading, loaded } = useModelRunner()
+  const { loadModel, runInference, outputs, outputTensors, outputSpecs, error, loading, loaded } = useModelRunner()
   const [selectedAdapter, setSelectedAdapter] = useState<ModelAdapter | null>(null)
   const [inputValues, setInputValues] = useState<Record<string, any>>({})
 
@@ -63,7 +63,7 @@ export default function ModelRunner({ adapters, onSelect }: ModelRunnerProps) {
               {loading ? 'Running...' : 'Run Inference'}
             </button>
 
-            <OutputViewer outputs={outputs} />
+            <OutputViewer outputs={outputs} outputTensors={outputTensors} outputSpecs={outputSpecs} />
           </div>
         )}
 

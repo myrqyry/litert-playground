@@ -1,13 +1,20 @@
 import { useState, useCallback, useRef } from 'react'
 import { loadLiteRt, loadAndCompile, Tensor } from '@litertjs/core'
-import type { ModelAdapter } from '../adapters/types'
+import type { ModelAdapter, TensorSpec } from '../adapters/types'
 
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@litertjs/core/wasm/'
+
+export interface RawTensor {
+  data: Float32Array
+  shape: number[]
+}
 
 interface UseModelRunnerReturn {
   loadModel: (adapter: ModelAdapter) => Promise<void>
   runInference: (values: Record<string, any>) => Promise<void>
   outputs: Record<string, any> | null
+  outputTensors: Record<string, RawTensor> | null
+  outputSpecs: TensorSpec[]
   error: string | null
   loading: boolean
   loaded: boolean
@@ -15,6 +22,8 @@ interface UseModelRunnerReturn {
 
 export function useModelRunner(): UseModelRunnerReturn {
   const [outputs, setOutputs] = useState<Record<string, any> | null>(null)
+  const [outputTensors, setOutputTensors] = useState<Record<string, RawTensor> | null>(null)
+  const [outputSpecs, setOutputSpecs] = useState<TensorSpec[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -64,6 +73,17 @@ export function useModelRunner(): UseModelRunnerReturn {
       const parsed = await adapterRef.current.parseOutputs(result)
       setOutputs(parsed)
 
+      const raw: Record<string, RawTensor> = {}
+      for (const spec of adapterRef.current.outputSpecs) {
+        const tensor = result[spec.name]
+        if (tensor) {
+          const arr = await (tensor as Tensor).data()
+          raw[spec.name] = { data: new Float32Array(arr), shape: spec.shape }
+        }
+      }
+      setOutputTensors(raw)
+      setOutputSpecs(adapterRef.current.outputSpecs)
+
       Object.values(inputs).forEach((t: any) => t?.delete?.())
     } catch (e: any) {
       setError(e.message ?? String(e))
@@ -72,5 +92,5 @@ export function useModelRunner(): UseModelRunnerReturn {
     }
   }, [])
 
-  return { loadModel, runInference, outputs, error, loading, loaded }
+  return { loadModel, runInference, outputs, outputTensors, outputSpecs, error, loading, loaded }
 }
