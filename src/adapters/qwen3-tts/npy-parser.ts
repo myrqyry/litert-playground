@@ -84,8 +84,7 @@ export async function parseNpz(buffer: ArrayBuffer): Promise<Record<string, Floa
         if (typeof window !== 'undefined') {
           throw new Error('Decompressed .npz data is not supported in the browser — use uncompressed .npy files')
         }
-        const mod = 'zlib'
-        const { inflateSync } = await import(mod)
+        const { inflateSync } = await import(/* @vite-ignore */ 'zlib')
         const inflated = inflateSync(new Uint8Array(buffer, dataOff, compSize))
         result[key] = parseNpy(inflated.buffer as ArrayBuffer)
       }

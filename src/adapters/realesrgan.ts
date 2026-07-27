@@ -3,7 +3,7 @@ import type { ModelAdapter, TensorSpec } from './types'
 
 const INPUT_SPECS: TensorSpec[] = [
   {
-    name: 'serving_default_args_0',
+    name: 'args_0',
     dtype: 'float32',
     shape: [1, 128, 128, 3],
     description: 'Input image (NHWC, 128x128, RGB, 0-1)',
