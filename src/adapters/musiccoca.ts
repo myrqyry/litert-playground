@@ -1,33 +1,6 @@
 import { Tensor } from '@litertjs/core'
 import type { ModelAdapter } from './types'
-
-function flatten(arr: any[]): number[] {
-  const out: number[] = []
-  function go(x: any) {
-    if (Array.isArray(x)) x.forEach(go)
-    else out.push(x)
-  }
-  go(arr)
-  return out
-}
-
-function toNestedArray(flat: Float32Array, dims: number[]): any {
-  if (dims.length === 0) return flat[0]
-  const size = dims[0]
-  const rest = dims.slice(1)
-  const result: any[] = []
-  let offset = 0
-  for (let i = 0; i < size; i++) {
-    const subLen = dims.slice(1).reduce((a, b) => a * b, 1)
-    if (rest.length === 1) {
-      result.push(Array.from(flat.slice(offset, offset + subLen)))
-    } else {
-      result.push(toNestedArray(flat.slice(offset, offset + subLen), rest))
-    }
-    offset += subLen
-  }
-  return result
-}
+import { flatten, toNestedArray } from './util'
 
 export const audioPreprocessor: ModelAdapter = {
   modelId: 'audio_preprocessor',
@@ -51,9 +24,9 @@ export const audioPreprocessor: ModelAdapter = {
     description: 'Mel-spectrogram features',
   }],
   prepareInputs(values: Record<string, any>) {
-    const arr = flatten(values['waveform'] ?? [])
-    if (arr.length !== 160000) arr.length = 160000
-    return { waveform: new Tensor(new Float32Array(arr), [1, 160000]) }
+    let arr = flatten(values['waveform'] ?? [])
+    if (arr.length !== 160000) { const tmp = new Float32Array(160000); tmp.set(arr.slice(0, 160000)); arr = tmp }
+    return { waveform: new Tensor(arr, [1, 160000]) }
   },
   async parseOutputs(outputs) {
     const t = outputs['Identity']
@@ -83,9 +56,9 @@ export const musicEncoder: ModelAdapter = {
     description: 'Music embedding vector',
   }],
   prepareInputs(values: Record<string, any>) {
-    const arr = flatten(values['features'] ?? [[]])
-    if (arr.length !== 992 * 128) arr.length = 992 * 128
-    return { 'serving_default_args_0:0': new Tensor(new Float32Array(arr), [1, 992, 128]) }
+    let arr = flatten(values['features'] ?? [[]])
+    if (arr.length !== 992 * 128) { const tmp = new Float32Array(992 * 128); tmp.set(arr.slice(0, 992 * 128)); arr = tmp }
+    return { 'serving_default_args_0:0': new Tensor(arr, [1, 992, 128]) }
   },
   async parseOutputs(outputs) {
     const t = outputs['StatefulPartitionedCall:0']
@@ -124,13 +97,14 @@ export const textEncoder: ModelAdapter = {
     description: 'Text embedding vector',
   }],
   prepareInputs(values: Record<string, any>) {
-    const ids = flatten(values['ids'] ?? []).map(Math.round)
-    if (ids.length !== 128) ids.length = 128
-    const paddings = flatten(values['paddings'] ?? [])
-    if (paddings.length !== 128) paddings.length = 128
+    let ids = flatten(values['ids'] ?? [])
+    ids = ids.map(Math.round) as any
+    if (ids.length !== 128) { const tmp = new Float32Array(128); tmp.set(ids.slice(0, 128)); ids = tmp }
+    let paddings = flatten(values['paddings'] ?? [])
+    if (paddings.length !== 128) { const tmp = new Float32Array(128); tmp.set(paddings.slice(0, 128)); paddings = tmp }
     return {
-      'serving_default_ids:0': new Tensor(new Int32Array(ids), [1, 128]),
-      'serving_default_paddings:0': new Tensor(new Float32Array(paddings), [1, 128]),
+      'serving_default_ids:0': new Tensor(new Int32Array(Array.from(ids)), [1, 128]),
+      'serving_default_paddings:0': new Tensor(paddings, [1, 128]),
     }
   },
   async parseOutputs(outputs) {
@@ -169,13 +143,13 @@ export const mapper: ModelAdapter = {
     description: 'Projected embedding',
   }],
   prepareInputs(values: Record<string, any>) {
-    const a = flatten(values['input_a'] ?? [])
-    if (a.length !== 768) a.length = 768
-    const b = flatten(values['input_b'] ?? [])
-    if (b.length !== 768) b.length = 768
+    let a = flatten(values['input_a'] ?? [])
+    if (a.length !== 768) { const tmp = new Float32Array(768); tmp.set(a.slice(0, 768)); a = tmp }
+    let b = flatten(values['input_b'] ?? [])
+    if (b.length !== 768) { const tmp = new Float32Array(768); tmp.set(b.slice(0, 768)); b = tmp }
     return {
-      'serving_default_args_0:0': new Tensor(new Float32Array(a), [1, 768]),
-      'serving_default_args_1:0': new Tensor(new Float32Array(b), [1, 768]),
+      'serving_default_args_0:0': new Tensor(a, [1, 768]),
+      'serving_default_args_1:0': new Tensor(b, [1, 768]),
     }
   },
   async parseOutputs(outputs) {
@@ -206,9 +180,9 @@ export const quantizer: ModelAdapter = {
     description: '12 discrete quantized tokens',
   }],
   prepareInputs(values: Record<string, any>) {
-    const arr = flatten(values['embedding'] ?? [])
-    if (arr.length !== 768) arr.length = 768
-    return { 'quantize_inputs:0': new Tensor(new Float32Array(arr), [1, 768]) }
+    let arr = flatten(values['embedding'] ?? [])
+    if (arr.length !== 768) { const tmp = new Float32Array(768); tmp.set(arr.slice(0, 768)); arr = tmp }
+    return { 'quantize_inputs:0': new Tensor(arr, [1, 768]) }
   },
   async parseOutputs(outputs) {
     const t = outputs['StatefulPartitionedCall_1:0']
@@ -217,7 +191,7 @@ export const quantizer: ModelAdapter = {
   },
 }
 
-export const registeredAdapters: ModelAdapter[] = [
+export const musicCocaAdapters: ModelAdapter[] = [
   audioPreprocessor,
   musicEncoder,
   textEncoder,

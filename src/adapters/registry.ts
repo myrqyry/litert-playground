@@ -2,12 +2,14 @@ import type { ModelAdapter } from './types'
 import { realesrganAdapter } from './realesrgan'
 import { nafnetAdapter } from './nafnet'
 import { dinov2Adapter } from './dinov2'
-import { registeredAdapters as musicCocaAdapters } from './magenta'
+import { magentaAdapters } from './magenta'
+import { musicCocaAdapters } from './musiccoca'
 import { visionAdapters } from './vision'
 import { sam2Adapters } from './sam2'
 import { adapters13 } from './batch2'
 
 export const registeredAdapters: ModelAdapter[] = [
+  ...magentaAdapters,
   ...musicCocaAdapters,
   realesrganAdapter,
   nafnetAdapter,

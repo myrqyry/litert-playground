@@ -1,5 +1,6 @@
 import { Tensor } from '@litertjs/core'
 import type { ModelAdapter } from './types'
+import { flatten, toNestedArray } from './util'
 
 const INPUT_SPECS = [
   {
@@ -39,12 +40,6 @@ const OUTPUT_SPECS = [
   }
 ]
 
-function flatten(input: number | number[] | number[][]): Float32Array {
-  if (typeof input === 'number') return new Float32Array([input])
-  if (Array.isArray(input[0])) return new Float32Array((input as number[][]).flat())
-  return new Float32Array(input as number[])
-}
-
 export const magentaAdapter: ModelAdapter = {
   modelId: 'magenta-realtime-2',
   metadata: {
@@ -83,22 +78,4 @@ export const magentaAdapter: ModelAdapter = {
   }
 }
 
-export const registeredAdapters: ModelAdapter[] = [magentaAdapter]
-
-function toNestedArray(flat: Float32Array, dims: number[]): any {
-  if (dims.length === 0) return flat[0]
-  const size = dims[0]
-  const rest = dims.slice(1)
-  const result: any[] = []
-  let offset = 0
-  for (let i = 0; i < size; i++) {
-    const subLen = dims.slice(1).reduce((a, b) => a * b, 1)
-    if (rest.length === 1) {
-      result.push(Array.from(flat.slice(offset, offset + subLen)))
-    } else {
-      result.push(toNestedArray(flat.slice(offset, offset + subLen), rest))
-    }
-    offset += subLen
-  }
-  return result
-}
+export const magentaAdapters: ModelAdapter[] = [magentaAdapter]

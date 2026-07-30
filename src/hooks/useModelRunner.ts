@@ -4,17 +4,21 @@ import type { ModelAdapter, TensorSpec } from '../adapters/types'
 
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@litertjs/core/wasm/'
 
+export type Accelerator = 'webgpu' | 'wasm' | 'webnn'
+
 export interface RawTensor {
   data: Float32Array
   shape: number[]
 }
 
 interface UseModelRunnerReturn {
-  loadModel: (adapter: ModelAdapter) => Promise<void>
+  loadModel: (adapter: ModelAdapter, accelerator?: Accelerator) => Promise<void>
   runInference: (values: Record<string, any>) => Promise<void>
   outputs: Record<string, any> | null
   outputTensors: Record<string, RawTensor> | null
   outputSpecs: TensorSpec[]
+  accelerator: Accelerator
+  setAccelerator: (a: Accelerator) => void
   error: string | null
   loading: boolean
   loaded: boolean
@@ -27,31 +31,45 @@ export function useModelRunner(): UseModelRunnerReturn {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [accelerator, setAccelerator] = useState<Accelerator>('webgpu')
   const modelRef = useRef<any>(null)
   const adapterRef = useRef<ModelAdapter | null>(null)
   const runtimeRef = useRef(false)
 
-  const loadModel = useCallback(async (adapter: ModelAdapter) => {
+  const loadModel = useCallback(async (adapter: ModelAdapter, acc?: Accelerator) => {
+    const targetAcc = acc ?? accelerator
     setLoading(true)
     setError(null)
+    setLoaded(false)
     try {
       if (!runtimeRef.current) {
-        await loadLiteRt(WASM_URL, { jspi: true })
+        await loadLiteRt(WASM_URL, { jspi: targetAcc === 'webnn' })
         runtimeRef.current = true
       }
 
       const model = await loadAndCompile(adapter.metadata.modelPath, {
-        accelerator: 'webgpu',
+        accelerator: targetAcc,
+        webNNOptions: targetAcc === 'webnn' ? { devicePreference: 'npu' } : undefined,
       })
       modelRef.current = model
       adapterRef.current = adapter
       setLoaded(true)
     } catch (e: any) {
+      if (targetAcc !== 'wasm') {
+        try {
+          const model = await loadAndCompile(adapter.metadata.modelPath, { accelerator: 'wasm' })
+          modelRef.current = model
+          adapterRef.current = adapter
+          setAccelerator('wasm')
+          setLoaded(true)
+          return
+        } catch {}
+      }
       setError(e.message ?? String(e))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [accelerator])
 
   const runInference = useCallback(async (values: Record<string, any>) => {
     if (!modelRef.current || !adapterRef.current) {
@@ -92,5 +110,5 @@ export function useModelRunner(): UseModelRunnerReturn {
     }
   }, [])
 
-  return { loadModel, runInference, outputs, outputTensors, outputSpecs, error, loading, loaded }
+  return { loadModel, runInference, outputs, outputTensors, outputSpecs, accelerator, setAccelerator, error, loading, loaded }
 }

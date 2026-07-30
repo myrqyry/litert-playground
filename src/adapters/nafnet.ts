@@ -1,5 +1,6 @@
 import { Tensor } from '@litertjs/core'
 import type { ModelAdapter, TensorSpec } from './types'
+import { flatten } from './util'
 
 const INPUT_SPECS: TensorSpec[] = [
   {
@@ -20,19 +21,12 @@ const OUTPUT_SPECS: TensorSpec[] = [
   },
 ]
 
-function flatten(arr: any): Float32Array {
-  if (arr instanceof Float32Array) return arr
-  if (typeof arr[0] === 'number') return new Float32Array(arr)
-  const flat = arr.flat(Infinity) as number[]
-  return new Float32Array(flat)
-}
-
 export const nafnetAdapter: ModelAdapter = {
   modelId: 'nafnet',
   metadata: {
     name: 'NAFNet SIDD width32',
     description: 'Image denoising (SIDD benchmark)',
-    modelPath: 'models/nafnet_sidd_width32_fp16.tflite',
+    modelPath: '/models/nafnet_sidd_width32_fp16.tflite',
     tags: ['vision', 'denoising'],
   },
   inputSpecs: INPUT_SPECS,

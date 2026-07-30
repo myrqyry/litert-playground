@@ -1,5 +1,6 @@
 import { Tensor } from '@litertjs/core'
 import type { ModelAdapter, TensorSpec } from './types'
+import { flatten } from './util'
 
 const INPUT_SPECS: TensorSpec[] = [
   {
@@ -20,19 +21,12 @@ const OUTPUT_SPECS: TensorSpec[] = [
   },
 ]
 
-function flatten(arr: any): Float32Array {
-  if (arr instanceof Float32Array) return arr
-  if (typeof arr[0] === 'number') return new Float32Array(arr)
-  const flat = arr.flat(Infinity) as number[]
-  return new Float32Array(flat)
-}
-
 export const dinov2Adapter: ModelAdapter = {
   modelId: 'dinov2',
   metadata: {
     name: 'DINOv2 ViT-S/14',
     description: 'Vision Transformer patch embeddings (384-dim)',
-    modelPath: 'models/dinov2_s_fp16.tflite',
+    modelPath: '/models/dinov2_s_fp16.tflite',
     tags: ['vision', 'embeddings'],
   },
   inputSpecs: INPUT_SPECS,

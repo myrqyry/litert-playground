@@ -57,8 +57,8 @@ export default function ImageInput({ specs, onChange }: ImageInputProps) {
 
   return (
     <div className="space-y-3">
-      <h2 className="text-sm font-semibold text-m3-onSurface">Image Input</h2>
-      {spec && <p className="text-xs text-m3-onSurfaceVariant">
+      <h2 className="text-sm font-semibold text-on-surface">Image Input</h2>
+      {spec && <p className="text-xs text-on-surface-variant">
         Expected: {spec.shape.join('×')} {spec.dtype} — {spec.description}
       </p>}
 
@@ -67,21 +67,21 @@ export default function ImageInput({ specs, onChange }: ImageInputProps) {
         onPaste={handlePaste}
         onDragOver={e => e.preventDefault()}
         onClick={() => inputRef.current?.click()}
-        className="border-2 border-dashed border-m3-outlineVariant rounded-xl p-8 text-center cursor-pointer hover:border-m3-primary transition-colors"
+        className="border-2 border-dashed border-outline-variant rounded-xl p-8 text-center cursor-pointer hover:border-primary transition-colors"
       >
         {preview ? (
           <div className="space-y-2">
             <img src={preview} className="max-h-56 mx-auto rounded-lg shadow" alt="Preview" />
             <p className="text-xs text-m3-onSurfaceVariant">{imgDims}</p>
-            <button
-              onClick={e => { e.stopPropagation(); setPreview(null); onChange({}) }}
-              className="text-xs text-m3-error hover:underline"
+              <button
+                onClick={e => { e.stopPropagation(); setPreview(null); onChange({}) }}
+                className="text-xs text-error hover:underline"
             >
               Remove
             </button>
           </div>
         ) : (
-          <div className="text-m3-onSurfaceVariant space-y-1">
+          <div className="text-on-surface-variant space-y-1">
             <svg className="w-10 h-10 mx-auto opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>

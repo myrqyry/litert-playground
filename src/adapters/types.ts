@@ -25,12 +25,5 @@ export interface ModelAdapter {
   outputSpecs: TensorSpec[]
   prepareInputs(values: Record<string, any>): Record<string, import('@litertjs/core').Tensor>
   parseOutputs(outputs: Record<string, import('@litertjs/core').Tensor>): Promise<Record<string, any>>
-}
-
-export interface PipelineAdapterConfig {
-  type: 'pipeline'
-  id: string
-  name: string
-  description: string
-  modelDir: string
+  isPipeline?: true
 }

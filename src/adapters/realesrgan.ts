@@ -1,5 +1,6 @@
 import { Tensor } from '@litertjs/core'
 import type { ModelAdapter, TensorSpec } from './types'
+import { flatten } from './util'
 
 const INPUT_SPECS: TensorSpec[] = [
   {
@@ -20,19 +21,12 @@ const OUTPUT_SPECS: TensorSpec[] = [
   },
 ]
 
-function flatten(arr: any): Float32Array {
-  if (arr instanceof Float32Array) return arr
-  if (typeof arr[0] === 'number') return new Float32Array(arr)
-  const flat = arr.flat(Infinity) as number[]
-  return new Float32Array(flat)
-}
-
 export const realesrganAdapter: ModelAdapter = {
   modelId: 'realesrgan',
   metadata: {
     name: 'Real-ESRGAN x4v3',
     description: 'General image super-resolution (4x upscale)',
-    modelPath: 'models/realesr_general_x4v3.tflite',
+    modelPath: '/models/realesr_general_x4v3.tflite',
     tags: ['vision', 'super-resolution'],
   },
   inputSpecs: INPUT_SPECS,

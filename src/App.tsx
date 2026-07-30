@@ -4,7 +4,7 @@ import { Qwen3TtsPanel } from './components/Qwen3TtsPanel'
 import { registeredAdapters } from './adapters/registry'
 import type { ModelAdapter } from './adapters/types'
 
-const ttsEntry: ModelAdapter & { isPipeline: true } = {
+const ttsEntry: ModelAdapter = {
   modelId: 'qwen3-tts',
   metadata: { name: 'Qwen3-TTS (Speech Synthesis)', description: 'Multilingual TTS via 3-graph pipeline', modelPath: '', tags: ['tts', 'pipeline'] },
   inputSpecs: [],
