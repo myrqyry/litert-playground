@@ -1,16 +1,35 @@
 import type { ModelAdapter } from './types'
+import { Tensor } from '@litertjs/core'
+import { resizeImageData, normalizeAndFormatImageData, tensorToImageData } from '../imageUtils'
 
 const s = (n: string, d: 'float32' | 'int32', sh: number[], desc: string) =>
   ({ name: n, dtype: d, shape: sh, description: desc })
-
-const stub = { prepareInputs: (v: any) => ({}), parseOutputs: async (o: any) => ({}) }
 
 export const depth3Adapter: ModelAdapter = {
   modelId: 'depth-anything-3',
   metadata: { name: 'Depth Anything 3', description: 'Monocular depth estimation (896×504)', modelPath: '/models/depth-anything/da3_small_gpu_fp16.tflite', tags: ['vision', 'depth'] },
   inputSpecs: [s('input', 'float32', [1, 3, 896, 504], 'RGB ImageNet-normalized NCHW')],
   outputSpecs: [s('depth', 'float32', [1, 1, 896, 504], 'Depth map')],
-  ...stub,
+  prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+    const imageData = values['image'] as ImageData;
+    if (!imageData) {
+      throw new Error('Image data not provided for depth3Adapter');
+    }
+    const [_, C, H, W] = this.inputSpecs[0].shape; // Get target shape from inputSpecs
+    const resized = resizeImageData(imageData, W, H);
+    const nchwTensor = normalizeAndFormatImageData(resized, [1, C, H, W], {
+      dataFormat: 'NCHW',
+      colorOrder: 'RGB',
+      normalization: 'imagenet',
+    });
+    return { 'input': nchwTensor };
+  },
+  parseOutputs(outputs: Record<string, Tensor>): Promise<Record<string, any>> {
+    const depthTensor = outputs['depth']
+    if (!depthTensor) throw new Error('Depth tensor not found in outputs')
+    const [_, _c, H, W] = this.outputSpecs[0].shape
+    return tensorToImageData(depthTensor, W, H).then(d => ({ depth: d }))
+  },
 }
 
 export const rtmposeFaceAdapter: ModelAdapter = {
@@ -21,10 +40,19 @@ export const rtmposeFaceAdapter: ModelAdapter = {
     s('simcc_x', 'float32', [1, 98, 512], 'SimCC X bins (argmax/2 → pixel)'),
     s('simcc_y', 'float32', [1, 98, 512], 'SimCC Y bins (argmax/2 → pixel)'),
   ],
-  ...stub,
+  prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+    const imageData = values['image'] as ImageData
+    if (!imageData) throw new Error('Image data not provided for rtmposeFaceAdapter')
+    const [_, C, H, W] = this.inputSpecs[0].shape
+    const resized = resizeImageData(imageData, W, H)
+    const t = normalizeAndFormatImageData(resized, [1, C, H, W], { dataFormat: 'NCHW', colorOrder: 'RGB', normalization: 'imagenet' })
+    return { input: t }
+  },
+  parseOutputs(outputs: Record<string, Tensor>): Promise<Record<string, any>> {
+    return Promise.resolve({ simcc_x: outputs.simcc_x, simcc_y: outputs.simcc_y })
+  },
 }
-
-export const rtmposeHandAdapter: ModelAdapter = {
+  export const rtmposeHandAdapter: ModelAdapter = {
   modelId: 'rtmpose-hand',
   metadata: { name: 'RTMPose Hand', description: '21-keypoint hand pose (256×256)', modelPath: '/models/rtmpose-hand/rtmhand_fp16.tflite', tags: ['vision', 'pose'] },
   inputSpecs: [s('input', 'float32', [1, 3, 256, 256], 'RGB ImageNet norm NCHW')],
@@ -32,7 +60,15 @@ export const rtmposeHandAdapter: ModelAdapter = {
     s('simcc_x', 'float32', [1, 21, 512], 'SimCC X bins'),
     s('simcc_y', 'float32', [1, 21, 512], 'SimCC Y bins'),
   ],
-  ...stub,
+  prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+    const img = values['image'] as ImageData
+    if (!img) throw new Error('Image data not provided')
+    const [_, C, H, W] = this.inputSpecs[0].shape
+    const resized = resizeImageData(img, W, H)
+    const t = normalizeAndFormatImageData(resized, [1, C, H, W], { dataFormat: 'NCHW', colorOrder: 'RGB', normalization: 'imagenet' })
+    return { input: t }
+  },
+  parseOutputs(o: Record<string, Tensor>) { return Promise.resolve({ simcc_x: o.simcc_x, simcc_y: o.simcc_y }) },
 }
 
 export const rtmposeSAdapter: ModelAdapter = {
@@ -43,7 +79,15 @@ export const rtmposeSAdapter: ModelAdapter = {
     s('simcc_x', 'float32', [1, 17, 384], 'SimCC X bins'),
     s('simcc_y', 'float32', [1, 17, 512], 'SimCC Y bins'),
   ],
-  ...stub,
+  prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+    const img = values['image'] as ImageData
+    if (!img) throw new Error('Image data not provided')
+    const [_, C, H, W] = this.inputSpecs[0].shape
+    const resized = resizeImageData(img, W, H)
+    const t = normalizeAndFormatImageData(resized, [1, C, H, W], { dataFormat: 'NCHW', colorOrder: 'RGB', normalization: 'imagenet' })
+    return { input: t }
+  },
+  parseOutputs(o: Record<string, Tensor>) { return Promise.resolve({ simcc_x: o.simcc_x, simcc_y: o.simcc_y }) },
 }
 
 export const rtmwAdapter: ModelAdapter = {
@@ -54,7 +98,15 @@ export const rtmwAdapter: ModelAdapter = {
     s('simcc_x', 'float32', [1, 133, 384], 'SimCC X bins'),
     s('simcc_y', 'float32', [1, 133, 512], 'SimCC Y bins'),
   ],
-  ...stub,
+  prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+    const img = values['image'] as ImageData
+    if (!img) throw new Error('Image data not provided')
+    const [_, C, H, W] = this.inputSpecs[0].shape
+    const resized = resizeImageData(img, W, H)
+    const t = normalizeAndFormatImageData(resized, [1, C, H, W], { dataFormat: 'NCHW', colorOrder: 'RGB', normalization: 'imagenet' })
+    return { input: t }
+  },
+  parseOutputs(o: Record<string, Tensor>) { return Promise.resolve({ simcc_x: o.simcc_x, simcc_y: o.simcc_y }) },
 }
 
 export const yolactAdapter: ModelAdapter = {
@@ -67,7 +119,15 @@ export const yolactAdapter: ModelAdapter = {
     s('mask', 'float32', [1, 19248, 32], 'Mask coefficients'),
     s('proto', 'float32', [1, 138, 138, 32], 'Prototype masks'),
   ],
-  ...stub,
+  prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+    const img = values['image'] as ImageData
+    if (!img) throw new Error('Image data not provided')
+    const [_, C, H, W] = this.inputSpecs[0].shape
+    const resized = resizeImageData(img, W, H)
+    const t = normalizeAndFormatImageData(resized, [1, C, H, W], { dataFormat: 'NCHW', colorOrder: 'BGR', normalization: 'imagenet' })
+    return { input: t }
+  },
+  parseOutputs(o: Record<string, Tensor>) { return Promise.resolve({ loc: o.loc, conf: o.conf, mask: o.mask, proto: o.proto }) },
 }
 
 export const ormbgAdapter: ModelAdapter = {
@@ -75,7 +135,18 @@ export const ormbgAdapter: ModelAdapter = {
   metadata: { name: 'ORMBG — BG Removal', description: 'Background removal (1024×1024)', modelPath: '/models/ormbg/ormbg.tflite', tags: ['vision', 'matting'] },
   inputSpecs: [s('input', 'float32', [1, 3, 1024, 1024], 'RGB x/255 NCHW')],
   outputSpecs: [s('alpha', 'float32', [1, 1, 1024, 1024], 'Alpha matte')],
-  ...stub,
+  prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+    const img = values['image'] as ImageData
+    if (!img) throw new Error('Image data not provided')
+    const [_, C, H, W] = this.inputSpecs[0].shape
+    const resized = resizeImageData(img, W, H)
+    const t = normalizeAndFormatImageData(resized, [1, C, H, W], { dataFormat: 'NCHW', colorOrder: 'RGB', normalization: '0-1' })
+    return { input: t }
+  },
+  parseOutputs(o: Record<string, Tensor>) {
+    const [_, _c, _h, W] = this.outputSpecs[0].shape
+    return tensorToImageData(o.alpha, W, _h).then(d => ({ alpha: d }))
+  },
 }
 
 export const u2netSalientAdapter: ModelAdapter = {
@@ -83,7 +154,18 @@ export const u2netSalientAdapter: ModelAdapter = {
   metadata: { name: 'U-2-Net — Saliency', description: 'Salient object detection (320×320)', modelPath: '/models/u2net-salient/u2net_fp16.tflite', tags: ['vision', 'segmentation'] },
   inputSpecs: [s('input', 'float32', [1, 3, 320, 320], 'RGB ImageNet-norm NCHW')],
   outputSpecs: [s('saliency', 'float32', [1, 1, 320, 320], 'Saliency mask [0,1]')],
-  ...stub,
+  prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+    const img = values['image'] as ImageData
+    if (!img) throw new Error('Image data not provided')
+    const [_, C, H, W] = this.inputSpecs[0].shape
+    const resized = resizeImageData(img, W, H)
+    const t = normalizeAndFormatImageData(resized, [1, C, H, W], { dataFormat: 'NCHW', colorOrder: 'RGB', normalization: 'imagenet' })
+    return { input: t }
+  },
+  parseOutputs(o: Record<string, Tensor>) {
+    const [_, _c, H, W] = this.outputSpecs[0].shape
+    return tensorToImageData(o.saliency, W, H).then(d => ({ saliency: d }))
+  },
 }
 
 export const modnetAdapter: ModelAdapter = {
@@ -91,7 +173,18 @@ export const modnetAdapter: ModelAdapter = {
   metadata: { name: 'MODNet — Matting', description: 'Trimap-free portrait matting (512×512)', modelPath: '/models/modnet/modnet.tflite', tags: ['vision', 'matting'] },
   inputSpecs: [s('input', 'float32', [1, 3, 512, 512], 'RGB [-1,1] NCHW')],
   outputSpecs: [s('alpha', 'float32', [1, 1, 512, 512], 'Soft alpha matte [0,1]')],
-  ...stub,
+  prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+    const img = values['image'] as ImageData
+    if (!img) throw new Error('Image data not provided')
+    const [_, C, H, W] = this.inputSpecs[0].shape
+    const resized = resizeImageData(img, W, H)
+    const t = normalizeAndFormatImageData(resized, [1, C, H, W], { dataFormat: 'NCHW', colorOrder: 'RGB', normalization: '-1-1' })
+    return { input: t }
+  },
+  parseOutputs(o: Record<string, Tensor>) {
+    const [_, _c, H, W] = this.outputSpecs[0].shape
+    return tensorToImageData(o.alpha, W, H).then(d => ({ alpha: d }))
+  },
 }
 
 export const yolo26SegAdapter: ModelAdapter = {
@@ -99,7 +192,15 @@ export const yolo26SegAdapter: ModelAdapter = {
   metadata: { name: 'YOLO26m Segmentation', description: 'EdgeFirst YOLO26 segmentation INT8', modelPath: '/models/yolo26-seg/yolo26m-seg-int8-smart.tflite', tags: ['vision', 'segmentation'] },
   inputSpecs: [s('input', 'float32', [1, 640, 640, 3], 'RGB NHWC')],
   outputSpecs: [s('output', 'float32', [1, 116, 8400], 'Detection + mask coeffs')],
-  ...stub,
+  prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+    const img = values['image'] as ImageData
+    if (!img) throw new Error('Image data not provided')
+    const [N, H, W, C] = this.inputSpecs[0].shape
+    const resized = resizeImageData(img, W, H)
+    const t = normalizeAndFormatImageData(resized, [N, H, W, C], { dataFormat: 'NHWC', colorOrder: 'RGB', normalization: '0-1' })
+    return { input: t }
+  },
+  parseOutputs(o: Record<string, Tensor>) { return Promise.resolve({ output: o.output }) },
 }
 
 export const yolo11SegAdapter: ModelAdapter = {
@@ -107,7 +208,15 @@ export const yolo11SegAdapter: ModelAdapter = {
   metadata: { name: 'YOLO11m Segmentation', description: 'EdgeFirst YOLO11 segmentation INT8', modelPath: '/models/yolo11-seg/yolo11m-seg-int8-smart.tflite', tags: ['vision', 'segmentation'] },
   inputSpecs: [s('input', 'float32', [1, 640, 640, 3], 'RGB NHWC')],
   outputSpecs: [s('output', 'float32', [1, 116, 8400], 'Detection + mask coeffs')],
-  ...stub,
+  prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+    const img = values['image'] as ImageData
+    if (!img) throw new Error('Image data not provided')
+    const [N, H, W, C] = this.inputSpecs[0].shape
+    const resized = resizeImageData(img, W, H)
+    const t = normalizeAndFormatImageData(resized, [N, H, W, C], { dataFormat: 'NHWC', colorOrder: 'RGB', normalization: '0-1' })
+    return { input: t }
+  },
+  parseOutputs(o: Record<string, Tensor>) { return Promise.resolve({ output: o.output }) },
 }
 
 export const yolov8SegAdapter: ModelAdapter = {
@@ -115,7 +224,15 @@ export const yolov8SegAdapter: ModelAdapter = {
   metadata: { name: 'YOLOv8m Segmentation', description: 'EdgeFirst YOLOv8 segmentation INT8', modelPath: '/models/yolov8-seg/yolov8m-seg-int8-smart.tflite', tags: ['vision', 'segmentation'] },
   inputSpecs: [s('input', 'float32', [1, 640, 640, 3], 'RGB NHWC')],
   outputSpecs: [s('output', 'float32', [1, 116, 8400], 'Detection + mask coeffs')],
-  ...stub,
+  prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+    const img = values['image'] as ImageData
+    if (!img) throw new Error('Image data not provided')
+    const [N, H, W, C] = this.inputSpecs[0].shape
+    const resized = resizeImageData(img, W, H)
+    const t = normalizeAndFormatImageData(resized, [N, H, W, C], { dataFormat: 'NHWC', colorOrder: 'RGB', normalization: '0-1' })
+    return { input: t }
+  },
+  parseOutputs(o: Record<string, Tensor>) { return Promise.resolve({ output: o.output }) },
 }
 
 export const clipsegAdapters: ModelAdapter[] = [
@@ -124,14 +241,28 @@ export const clipsegAdapters: ModelAdapter[] = [
     metadata: { name: 'CLIPSeg — Text Encoder', description: 'Text encoder for text-prompted segmentation', modelPath: '/models/clipseg/clipseg_text_fp16.tflite', tags: ['vision', 'segmentation'] },
     inputSpecs: [s('input', 'float32', [1, 77], 'Text tokens')],
     outputSpecs: [s('text_emb', 'float32', [1, 64], 'Text embedding')],
-    ...stub,
+    prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+      const tokens = values['input'] as Float32Array | Int32Array
+      if (!tokens) throw new Error('Text tokens not provided for clipseg-text')
+      const [N, L] = this.inputSpecs[0].shape
+      return { input: new Tensor(new Float32Array(tokens), [N, L]) }
+    },
+    parseOutputs(o: Record<string, Tensor>) { return Promise.resolve({ text_emb: o.text_emb }) },
   },
   {
     modelId: 'clipseg-vision',
     metadata: { name: 'CLIPSeg — Vision Encoder', description: 'Vision encoder for text-prompted segmentation', modelPath: '/models/clipseg/clipseg_vision_fp16.tflite', tags: ['vision', 'segmentation'] },
     inputSpecs: [s('input', 'float32', [1, 3, 352, 352], 'RGB x/255 NCHW')],
     outputSpecs: [s('vision_emb', 'float32', [1, 64], 'Visual embedding')],
-    ...stub,
+    prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+      const img = values['image'] as ImageData
+      if (!img) throw new Error('Image data not provided for clipseg-vision')
+      const [_, C, H, W] = this.inputSpecs[0].shape
+      const resized = resizeImageData(img, W, H)
+      const t = normalizeAndFormatImageData(resized, [1, C, H, W], { dataFormat: 'NCHW', colorOrder: 'RGB', normalization: '0-1' })
+      return { input: t }
+    },
+    parseOutputs(o: Record<string, Tensor>) { return Promise.resolve({ vision_emb: o.vision_emb }) },
   },
   {
     modelId: 'clipseg-decoder',
@@ -141,7 +272,17 @@ export const clipsegAdapters: ModelAdapter[] = [
       s('vision_emb', 'float32', [1, 64], 'From CLIPSeg vision encoder'),
     ],
     outputSpecs: [s('mask', 'float32', [1, 1, 352, 352], 'Segmentation mask')],
-    ...stub,
+    isPipeline: true as const,
+    prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+      const textEmb = values['text_emb'] as Tensor
+      const visionEmb = values['vision_emb'] as Tensor
+      if (!textEmb || !visionEmb) throw new Error('Both text_emb and vision_emb required for clipseg-decoder')
+      return { text_emb: textEmb, vision_emb: visionEmb }
+    },
+    parseOutputs(o: Record<string, Tensor>) {
+      const [_, _c, H, W] = this.outputSpecs[0].shape
+      return tensorToImageData(o.mask, W, H).then(d => ({ mask: d }))
+    },
   },
 ]
 

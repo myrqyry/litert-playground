@@ -29,21 +29,26 @@ export class Talker {
 
   async prefill(
     embeddings: Float32Array,
-    inputPos: Int32Array,
     kvCache: Record<string, Tensor>,
+    seqLen?: number,
   ): Promise<{ logits: Float32Array; hidden: Float32Array; kvCache: Record<string, Tensor>; }> {
     const inputs: Record<string, Tensor> = { ...kvCache }
-    // prefill_32 signature
+    const sl = seqLen ?? (embeddings.length / this.config.hiddenDim) | 0
     const negInf = -1e9
-    const seqLen = embeddings.length / this.config.hiddenDim
     const mask = new Float32Array(1 * 1 * 32 * 32).fill(negInf)
-    for (let i = 0; i < 32 && i < seqLen; i++) {
-      for (let j = 0; j <= i && j < seqLen; j++) {
+    for (let i = 0; i < 32 && i < sl; i++) {
+      for (let j = 0; j <= i && j < sl; j++) {
         mask[i * 32 + j] = 0
       }
     }
 
-    inputs['embeddings'] = new Tensor(embeddings, [1, 32, this.config.hiddenDim])
+    const inputPos = new Int32Array(32)
+    for (let i = 0; i < 32; i++) inputPos[i] = i
+
+    const paddedEmb = new Float32Array(32 * this.config.hiddenDim)
+    paddedEmb.set(embeddings)
+
+    inputs['embeddings'] = new Tensor(paddedEmb, [1, 32, this.config.hiddenDim])
     inputs['input_pos'] = new Tensor(inputPos, [32])
     inputs['mask'] = new Tensor(mask, [1, 1, 32, 32])
 
@@ -66,19 +71,17 @@ export class Talker {
 
   async decode(
     embeddings: Float32Array,
-    inputPos: Int32Array,
     kvCache: Record<string, Tensor>,
+    pos?: number,
   ): Promise<{ logits: Float32Array; hidden: Float32Array; kvCache: Record<string, Tensor>; }> {
     const inputs: Record<string, Tensor> = { ...kvCache }
+    const p = pos ?? 0
     const negInf = -1e9
-    const pos = inputPos[0]
     const mask = new Float32Array(1 * 1 * 1 * 32).fill(negInf)
-    for (let i = 0; i <= pos; i++) mask[i] = 0
+    for (let i = 0; i <= p; i++) mask[i] = 0
 
     inputs['embeddings'] = new Tensor(embeddings, [1, 1, this.config.hiddenDim])
-    inputs['input_pos'] = inputPos.length === 1
-      ? new Tensor(inputPos, [1])
-      : new Tensor(inputPos, [1])
+    inputs['input_pos'] = new Tensor(new Int32Array([p]), [1])
     inputs['mask'] = new Tensor(mask, [1, 1, 1, 32])
 
     const result = await this.model.run('decode', inputs)
