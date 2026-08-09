@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react'
-import { Qwen3TtsPipeline, TTSProgress, TTSConfig } from '../adapters/qwen3-tts/pipeline'
+import { useState, useEffect, useRef } from 'react'
+import { Qwen3TtsPipeline, type QwenTtsConfig } from '../adapters/qwen3-tts/pipeline'
+import { createHttpAssetResolver } from '../assets/http-resolver'
+import { createRuntimeContext } from '../runtime/context'
+import type { PipelineProgress } from '../core/types'
 
 let pipeline: Qwen3TtsPipeline | null = null
 
@@ -10,7 +13,7 @@ export function Qwen3TtsPanel() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [status, setStatus] = useState('Not loaded')
   const [error, setError] = useState<string | null>(null)
-  const [cfg, setCfg] = useState<TTSConfig>({
+  const [cfg, setCfg] = useState<QwenTtsConfig>({
     temperature: 0.85,
     topK: 25,
     repetitionPenalty: 1.05,
@@ -19,18 +22,27 @@ export function Qwen3TtsPanel() {
     language: 'english'
   })
 
-  const updateCfg = (updater: (prev: TTSConfig) => TTSConfig) => setCfg(updater)
+  const updateCfg = (updater: (prev: QwenTtsConfig) => QwenTtsConfig) => setCfg(updater)
+  const loadRef = useRef(false)
 
   useEffect(() => {
-    if (pipeline?.ready) { setStatus('Ready'); return }
-    if (pipeline && !pipeline.ready) { pipeline = null }
+    if (loadRef.current) return
+    loadRef.current = true
+
+    if (pipeline?.status === 'ready') { setStatus('Ready'); return }
+    pipeline = null
+
     setStatus('Loading...')
     setError(null)
-    const p = new Qwen3TtsPipeline('/models/qwen3-tts')
-    p.onProgress = (pr: TTSProgress) => {
+
+    const p = new Qwen3TtsPipeline()
+    p.onProgress = (pr: PipelineProgress) => {
       setProgress(`${pr.phase} ${pr.step}/${pr.total}`)
     }
-    p.load()
+
+    const assets = createHttpAssetResolver('/models/qwen3-tts/')
+    createRuntimeContext('/models/qwen3-tts', assets)
+      .then(ctx => p.load(ctx))
       .then(() => { pipeline = p; setStatus('Ready'); setError(null) })
       .catch((e: unknown) => { setStatus('Load failed'); setError(String(e)) })
   }, [])
@@ -41,11 +53,11 @@ export function Qwen3TtsPanel() {
     setAudioUrl(null)
     try {
       setProgress('Generating...')
-      const audio = await pipeline.synthesize(text, cfg)
-      const wav = encodeWav(audio, 24000)
+      const result = await pipeline.run({ text }, cfg)
+      const wav = encodeWav(result.samples, result.sampleRate)
       const url = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }))
       setAudioUrl(url)
-      setProgress('Done')
+      setProgress(`Done (${result.durationSeconds.toFixed(1)}s)`)
     } catch (e: unknown) {
       setProgress(`Error: ${e}`)
     }
@@ -54,6 +66,7 @@ export function Qwen3TtsPanel() {
 
   const handleRetry = () => {
     pipeline = null
+    loadRef.current = false
     setStatus('Not loaded')
     setError(null)
     setProgress('')

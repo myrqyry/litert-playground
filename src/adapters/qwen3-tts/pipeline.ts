@@ -1,47 +1,26 @@
-import { loadLiteRt, loadAndCompile, CompiledModel, Tensor } from '@litertjs/core'
+import { CompiledModel } from '@litertjs/core'
 import { BPETokenizer } from './tokenizer'
 import { Talker } from './talker'
 import { MTP } from './mtp'
 import { CodecDecoder } from './codec'
 import { sample, SampleOpts } from './sampler'
 import { parseNpy, parseNpz } from './npy-parser'
-
-export interface TTSConfig {
-  temperature?: number
-  topK?: number
-  repetitionPenalty?: number
-  voice?: string
-  maxFrames?: number
-  language?: string
-}
-
-export interface TTSProgress {
-  phase: 'loading' | 'prefill' | 'decode' | 'mtp' | 'codec' | 'done'
-  step: number
-  total: number
-}
-
-const DEFAULT_CONFIG: TTSConfig = {
-  temperature: 0.85,
-  topK: 25,
-  repetitionPenalty: 1.05,
-  voice: 'demo_speaker',
-  maxFrames: 512,
-  language: 'english',
-}
+import { buildPrompt } from './prompt'
+import { qwen3TtsManifest } from './manifest'
+import {
+  type Pipeline,
+  type PipelineStatus,
+  type PipelineProgress,
+  type RuntimeContext,
+  type AudioInferenceResult,
+  type InferenceReceipt,
+  InferenceError,
+} from '../../core/types'
+import { checkAudioValid } from '../../core/validation'
 
 const HIDDEN = 1024
 const CODEC_VOCAB = 3072
-const CODEC_PAD = 2148
-const CODEC_BOS = 2149
 const CODEC_EOS = 2150
-const CODEC_THINK = 2154
-const CODEC_THINK_BOS = 2156
-const CODEC_THINK_EOS = 2157
-const CODEC_NOTHINK = 2155
-const TTS_PAD = 151671
-const TTS_BOS = 151672
-const TTS_EOS = 151673
 const NEG_INF = -1e9
 
 const LANGUAGE_IDS: Record<string, number> = {
@@ -51,13 +30,30 @@ const LANGUAGE_IDS: Record<string, number> = {
   russian: 2069,
 }
 
-export class Qwen3TtsPipeline {
-  tokenizer: BPETokenizer | null = null
+export interface QwenTtsInput { text: string }
 
-  ready = false
-  private talkerModel: CompiledModel | null = null
-  private mtpModel: CompiledModel | null = null
-  private codecModel: CompiledModel | null = null
+export interface QwenTtsConfig {
+  temperature?: number
+  topK?: number
+  repetitionPenalty?: number
+  voice?: string
+  maxFrames?: number
+  language?: string
+}
+
+const DEFAULTS: QwenTtsConfig = {
+  temperature: 0.85, topK: 25, repetitionPenalty: 1.05,
+  voice: 'demo_speaker', maxFrames: 512, language: 'english',
+}
+
+export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceResult, QwenTtsConfig> {
+  readonly manifest = qwen3TtsManifest
+  status: PipelineStatus = 'idle'
+
+  onProgress?: (progress: PipelineProgress) => void
+
+  private context: RuntimeContext | null = null
+  private tokenizer: BPETokenizer | null = null
   private talker!: Talker
   private mtp!: MTP
   private codec!: CodecDecoder
@@ -68,171 +64,204 @@ export class Qwen3TtsPipeline {
   private projB1!: Float32Array
   private projW2!: Float32Array
   private projB2!: Float32Array
+  private talkerModel: CompiledModel | null = null
+  private mtpModel: CompiledModel | null = null
+  private codecModel: CompiledModel | null = null
 
-  constructor(private modelDir: string) {}
+  async load(context: RuntimeContext): Promise<void> {
+    if (this.status === 'ready') return
+    this.status = 'loading'
+    this.context = context
 
-  onProgress?: (progress: TTSProgress) => void
+    try {
+      this.report({ phase: 'loading', step: 0, total: 7 })
 
-  async load(): Promise<void> {
-    await loadLiteRt('https://cdn.jsdelivr.net/npm/@litertjs/core/wasm/', { jspi: true })
-    this.onProgress?.({ phase: 'loading', step: 0, total: 7 })
-    const base = this.modelDir
+      const tokData = await context.assets.resolve({ id: 'tokenizer', path: 'tokenizer.json' })
+      this.tokenizer = new BPETokenizer(JSON.parse(new TextDecoder().decode(tokData)))
+      this.report({ phase: 'loading', step: 1, total: 7 })
 
-    const tokRes = await fetch(`${base}/tokenizer.json`)
-    this.tokenizer = new BPETokenizer(await tokRes.json())
-    this.onProgress?.({ phase: 'loading', step: 1, total: 7 })
+      this.codecEmb = await context.liteRt.loadNpy('tables/codec_embedding_fp32.npy')
+      this.report({ phase: 'loading', step: 2, total: 7 })
 
-    const codecEmb = await this.loadNpy(`${base}/tables/codec_embedding_fp32.npy`)
-    this.codecEmb = codecEmb as Float32Array
-    this.onProgress?.({ phase: 'loading', step: 2, total: 7 })
+      this.mtpEmb = await context.liteRt.loadNpy('tables/mtp_embeddings_fp16.npy')
+      this.report({ phase: 'loading', step: 3, total: 7 })
 
-    const mtpEmb = await this.loadNpy(`${base}/tables/mtp_embeddings_fp16.npy`)
-    this.mtpEmb = mtpEmb as Float32Array
-    this.onProgress?.({ phase: 'loading', step: 3, total: 7 })
+      this.textEmbData = await context.liteRt.loadNpy('tables/text_embedding_fp16.npy')
+      this.report({ phase: 'loading', step: 4, total: 7 })
 
-    // text_embedding_fp16 is ~1.2GB fp16, use fp16 via direct .npy
-    const textEmb = await this.loadNpy(`${base}/tables/text_embedding_fp16.npy`)
-    this.textEmbData = textEmb as Float32Array
-    this.onProgress?.({ phase: 'loading', step: 4, total: 7 })
+      const projBuf = await context.assets.resolve({ id: 'text-projection', path: 'tables/text_projection_fp32.npz' })
+      const proj = await parseNpz(projBuf)
+      this.projW1 = proj['w1'] as Float32Array
+      this.projB1 = proj['b1'] as Float32Array
+      this.projW2 = proj['w2'] as Float32Array
+      this.projB2 = proj['b2'] as Float32Array
+      this.report({ phase: 'loading', step: 5, total: 7 })
 
-    const projRes = await fetch(`${base}/tables/text_projection_fp32.npz`)
-    const proj = await parseNpz(await projRes.arrayBuffer())
-    this.projW1 = proj['w1'] as Float32Array
-    this.projB1 = proj['b1'] as Float32Array
-    this.projW2 = proj['w2'] as Float32Array
-    this.projB2 = proj['b2'] as Float32Array
-    this.onProgress?.({ phase: 'loading', step: 5, total: 7 })
+      this.talkerModel = await context.liteRt.loadModel('talker_fp32.tflite')
+      this.report({ phase: 'loading', step: 6, total: 7 })
 
-    this.talkerModel = await this.loadModel(`${base}/talker_fp32.tflite`)
-    this.onProgress?.({ phase: 'loading', step: 6, total: 7 })
+      this.mtpModel = await context.liteRt.loadModel('mtp_fp32.tflite')
+      this.codecModel = await context.liteRt.loadModel('codec_decoder_fp32.tflite')
 
-    this.mtpModel = await this.loadModel(`${base}/mtp_fp32.tflite`)
-    const codecModel = await this.loadModel(`${base}/codec_decoder_fp32.tflite`)
-
-    this.talker = new Talker(this.talkerModel)
-    this.mtp = new MTP(this.mtpModel, {
-      mtpEmbeddings: this.mtpEmb,
-      codecEmbeddings: this.codecEmb,
-    })
-    this.codec = new CodecDecoder(codecModel)
-    this.onProgress?.({ phase: 'loading', step: 7, total: 7 })
-    this.ready = true
+      this.talker = new Talker(this.talkerModel)
+      this.mtp = new MTP(this.mtpModel, { mtpEmbeddings: this.mtpEmb, codecEmbeddings: this.codecEmb })
+      this.codec = new CodecDecoder(this.codecModel)
+      this.report({ phase: 'loading', step: 7, total: 7 })
+      this.status = 'ready'
+    } catch (e) {
+      this.status = 'error'
+      throw e instanceof InferenceError ? e : new InferenceError('MODEL_COMPILE_FAILED', String(e), { cause: e })
+    }
   }
 
-  async synthesize(text: string, config?: TTSConfig): Promise<Float32Array> {
-    if (!this.tokenizer) throw new Error('Pipeline not loaded')
+  async run(input: QwenTtsInput, cfg?: QwenTtsConfig, signal?: AbortSignal): Promise<AudioInferenceResult> {
+    if (this.status !== 'ready') throw new InferenceError('INFERENCE_FAILED', 'Pipeline not ready')
+    this.status = 'running'
 
-    const cfg = { ...DEFAULT_CONFIG, ...config }
-    const lang = LANGUAGE_IDS[cfg.language || 'english'] || LANGUAGE_IDS.english
+    const config = { ...DEFAULTS, ...cfg }
+    const ctx = this.context!
 
-    const speakerResp = await fetch(`${this.modelDir}/voices/${cfg.voice}.npy`)
-    const speakerEmb = parseNpy(await speakerResp.arrayBuffer())
+    try {
+      const lang = LANGUAGE_IDS[config.language || 'english'] || LANGUAGE_IDS.english
+      const voicePath = `voices/${config.voice}.npy`
 
-    // Build prompt
-    const { prefill, trailing, ttsPad } = this.buildPrompt(text, speakerEmb, lang)
+      const speakerBuf = signal
+        ? await raceWithSignal(ctx.assets.resolve({ id: 'voice', path: voicePath, optional: true }), signal)
+        : await ctx.assets.resolve({ id: 'voice', path: voicePath, optional: true })
 
-    // Prefill talker
-    this.onProgress?.({ phase: 'prefill', step: 0, total: 1 })
-    const kv: Record<string, Tensor> = {}
-    const sl = prefill.length / HIDDEN
-    const { logits, hidden, kvCache } = await this.talker.prefill(prefill, kv, sl)
+      const speakerEmb = parseNpy(speakerBuf)
 
-    // Decode loop
-    const sampleOpts: SampleOpts = {
-      temperature: cfg.temperature || 0.85,
-      topK: cfg.topK || 25,
-      repetitionPenalty: cfg.repetitionPenalty || 1.05,
-      prevTokens: [],
+      const { prefill, trailing, ttsPad } = buildPrompt(
+        input.text, speakerEmb, lang, this.tokenizer!, this.codecEmb, this.textEmbData,
+        (row: Float32Array) => this.projectText(row),
+      )
+
+      if (signal?.aborted) throw new InferenceError('CANCELLED', 'Cancelled before prefill')
+
+      this.report({ phase: 'prefill', step: 0, total: 1 })
+      const kv: Record<string, import('@litertjs/core').Tensor> = {}
+      const sl = prefill.length / HIDDEN
+      const { logits, hidden, kvCache } = await this.talker.prefill(prefill, kv, sl)
+
+      const sampleOpts: SampleOpts = {
+        temperature: config.temperature || 0.85,
+        topK: config.topK || 25,
+        repetitionPenalty: config.repetitionPenalty || 1.05,
+        prevTokens: [],
+      }
+
+      const allFrames: number[][] = []
+      let currentLogits = logits
+      let currentHidden = hidden
+      let currentKv = kvCache
+      const maxFrames = config.maxFrames || 512
+
+      for (let frame = 0; frame < maxFrames; frame++) {
+        if (signal?.aborted) throw new InferenceError('CANCELLED', 'Cancelled during generation')
+
+        this.report({ phase: 'decode', step: frame, total: maxFrames })
+
+        const scores = new Float32Array(currentLogits)
+        for (let i = 2048; i < CODEC_VOCAB; i++) scores[i] = NEG_INF
+        scores[CODEC_EOS] = 0
+        if (frame < 2) scores[CODEC_EOS] = NEG_INF
+
+        for (const token of sampleOpts.prevTokens) {
+          scores[token] = scores[token] > 0
+            ? scores[token] / sampleOpts.repetitionPenalty
+            : scores[token] * sampleOpts.repetitionPenalty
+        }
+
+        const cb0 = sample(scores, { ...sampleOpts, prevTokens: [] })
+        if (cb0 === CODEC_EOS) break
+        sampleOpts.prevTokens.push(cb0)
+
+        this.report({ phase: 'mtp', step: frame, total: maxFrames })
+        const residual = await this.mtp.predict(currentHidden, cb0, {
+          temperature: config.temperature,
+          topK: config.topK,
+        })
+        allFrames.push([cb0, ...residual])
+
+        const frameIdx = frame < trailing.length ? frame : trailing.length - 1
+        const textCond = frameIdx >= 0 ? trailing[frameIdx] : ttsPad
+
+        let sumEmb = new Float32Array(HIDDEN)
+        const cb0Emb = this.codecEmb.slice(cb0 * HIDDEN, (cb0 + 1) * HIDDEN)
+        for (let i = 0; i < HIDDEN; i++) sumEmb[i] += cb0Emb[i]
+
+        for (let r = 0; r < residual.length; r++) {
+          const re = this.mtpEmb.slice(r * CODEC_VOCAB * HIDDEN + residual[r] * HIDDEN,
+            r * CODEC_VOCAB * HIDDEN + (residual[r] + 1) * HIDDEN)
+          for (let i = 0; i < HIDDEN; i++) sumEmb[i] += re[i] / residual.length
+        }
+
+        for (let i = 0; i < HIDDEN; i++) sumEmb[i] += textCond[i]
+
+        const result = await this.talker.decode(sumEmb, currentKv, frame + 1)
+        currentLogits = result.logits
+        currentHidden = result.hidden
+        currentKv = result.kvCache
+      }
+
+      if (allFrames.length === 0) {
+        this.status = 'ready'
+        return { kind: 'audio', samples: new Float32Array(0), sampleRate: 24000, channels: 1, durationSeconds: 0 }
+      }
+
+      this.report({ phase: 'codec', step: 0, total: 1 })
+      const audio = await this.codec.decode(allFrames)
+
+      const duration = audio.length / 24000
+      const warnings = checkAudioValid(audio, 24000, 1, duration)
+
+      this.report({ phase: 'done', step: 1, total: 1 })
+
+      if (warnings.length > 0) {
+        console.warn('Qwen3TTS output warnings:', warnings)
+      }
+
+      this.status = 'ready'
+      return { kind: 'audio', samples: audio, sampleRate: 24000, channels: 1, durationSeconds: duration }
+    } catch (e) {
+      this.status = 'ready'
+      throw e instanceof InferenceError ? e : new InferenceError('INFERENCE_FAILED', String(e), { cause: e })
     }
+  }
 
-    const allFrames: number[][] = []
-    let currentLogits = logits
-    let currentHidden = hidden
-    let currentKv = kvCache
-    const maxFrames = cfg.maxFrames || 512
+  async dispose(): Promise<void> {
+    this.talkerModel = null
+    this.mtpModel = null
+    this.codecModel = null
+    this.tokenizer = null
+    this.context = null
+    this.status = 'disposed'
+  }
 
-    for (let frame = 0; frame < maxFrames; frame++) {
-      this.onProgress?.({ phase: 'decode', step: frame, total: maxFrames })
-
-      // Suppress control tokens (2048+)
-      const scores = new Float32Array(currentLogits)
-      for (let i = 2048; i < CODEC_VOCAB; i++) scores[i] = NEG_INF
-      scores[CODEC_EOS] = 0
-
-      if (frame < 2) scores[CODEC_EOS] = NEG_INF
-
-      for (const token of sampleOpts.prevTokens) {
-        scores[token] = scores[token] > 0
-          ? scores[token] / sampleOpts.repetitionPenalty
-          : scores[token] * sampleOpts.repetitionPenalty
-      }
-
-      const cb0 = sample(scores, { ...sampleOpts, prevTokens: [] })
-      if (cb0 === CODEC_EOS) break
-      sampleOpts.prevTokens.push(cb0)
-
-      this.onProgress?.({ phase: 'mtp', step: frame, total: maxFrames })
-
-      const mtpOpts: Partial<SampleOpts> = {
-        temperature: cfg.temperature,
-        topK: cfg.topK,
-      }
-      const residual = await this.mtp.predict(currentHidden, cb0, mtpOpts)
-      allFrames.push([cb0, ...residual])
-
-      // Build decoder input embedding:
-      // codec_emb[cb0] + mtp_emb.mean(residual) + trailing[frame] or tts_pad
-      const frameIdx = frame < trailing.length ? frame : trailing.length - 1
-      const textCond = frameIdx >= 0 ? trailing[frameIdx] : ttsPad
-
-      let sumEmb = new Float32Array(HIDDEN)
-      // codec embedding for cb0
-      const cb0Emb = this.codecEmb.slice(cb0 * HIDDEN, (cb0 + 1) * HIDDEN)
-      for (let i = 0; i < HIDDEN; i++) sumEmb[i] += cb0Emb[i]
-
-      // mtp embedding mean for residuals
-      for (let r = 0; r < residual.length; r++) {
-        const re = this.mtpEmb.slice(r * CODEC_VOCAB * HIDDEN + residual[r] * HIDDEN,
-          r * CODEC_VOCAB * HIDDEN + (residual[r] + 1) * HIDDEN)
-        for (let i = 0; i < HIDDEN; i++) sumEmb[i] += re[i] / residual.length
-      }
-
-      for (let i = 0; i < HIDDEN; i++) sumEmb[i] += textCond[i]
-
-      this.onProgress?.({ phase: 'decode', step: frame, total: maxFrames })
-      const pos = frame + 1
-      const result = await this.talker.decode(sumEmb, currentKv, pos)
-      currentLogits = result.logits
-      currentHidden = result.hidden
-      currentKv = result.kvCache
+  createReceipt(elapsed: { loadMs: number; compileMs: number; inferenceMs: number }, inputSummary: string, outputSummary: string): InferenceReceipt {
+    return {
+      modelId: this.manifest.modelId,
+      pipelineVersion: this.manifest.version,
+      backend: this.context?.backend || 'wasm',
+      timestamp: new Date().toISOString(),
+      ...elapsed,
+      inputSummary,
+      outputSummary,
+      warnings: [],
     }
+  }
 
-    if (allFrames.length === 0) return new Float32Array(0)
+  // ---- internals ----
 
-    this.onProgress?.({ phase: 'codec', step: 0, total: 1 })
-    const audio = await this.codec.decode(allFrames)
-    this.onProgress?.({ phase: 'done', step: 1, total: 1 })
-    return audio
+  private report(progress: PipelineProgress): void {
+    this.onProgress?.(progress)
   }
 
   private silu(x: number): number {
     return x / (1 + Math.exp(-x))
   }
 
-  private embedText(ids: number[]): Float32Array[] {
-    return ids.map(id => {
-      const base = id * HIDDEN
-      if (base + HIDDEN > this.textEmbData.length) {
-        return new Float32Array(HIDDEN)
-      }
-      // fp16 stored as float32 after parseNpy
-      const row = this.textEmbData.slice(base, base + HIDDEN)
-      return this.projectText(row)
-    })
-  }
-
   private projectText(row: Float32Array): Float32Array {
-    // SiLU MLP: silu(x @ W1 + b1) @ W2 + b2
     const hiddenDim = HIDDEN * 4
     const h = new Float32Array(hiddenDim)
     for (let i = 0; i < hiddenDim; i++) {
@@ -248,66 +277,16 @@ export class Qwen3TtsPipeline {
     }
     return out
   }
+}
 
-  private buildPrompt(text: string, speakerEmb: Float32Array, langId: number) {
-    const tok = this.tokenizer!
-    const ids = tok.encode(`<|im_start|>assistant\n${text}<|im_end|>\n<|im_start|>assistant\n`)
-
-    const ttsBos = this.embedText([TTS_BOS])[0]
-    const ttsEos = this.embedText([TTS_EOS])[0]
-    const ttsPad = this.embedText([TTS_PAD])[0]
-
-    const control: number[] = [CODEC_THINK, CODEC_THINK_BOS, langId, CODEC_THINK_EOS]
-    const codecPreEmb = control.map(c => this.codecEmb.slice(c * HIDDEN, (c + 1) * HIDDEN))
-
-    const roleIds = ids.slice(0, 3)
-    const roleEmb = this.embedText(roleIds)
-    // role + codecPre + speaker + pad + bos
-    const bodyEmb: Float32Array[] = []
-    for (const ce of codecPreEmb) {
-      const p = new Float32Array(HIDDEN)
-      for (let i = 0; i < HIDDEN; i++) p[i] = ttsPad[i] + ce[i]
-      bodyEmb.push(p)
-    }
-    const speakerRow = new Float32Array(HIDDEN)
-    for (let i = 0; i < HIDDEN; i++) speakerRow[i] = ttsPad[i] + speakerEmb[i]
-    bodyEmb.push(speakerRow)
-    const bosRow = new Float32Array(HIDDEN)
-    for (let i = 0; i < HIDDEN; i++) bosRow[i] = ttsPad[i] + this.codecEmb[CODEC_PAD * HIDDEN + i]
-    bodyEmb.push(bosRow)
-
-    const firstTextId = ids[3]
-    const firstTextEmb = this.embedText([firstTextId])[0]
-    const codecEosEmb = this.codecEmb.slice(CODEC_BOS * HIDDEN, (CODEC_BOS + 1) * HIDDEN)
-    const firstTextRow = new Float32Array(HIDDEN)
-    for (let i = 0; i < HIDDEN; i++) firstTextRow[i] = firstTextEmb[i] + codecEosEmb[i]
-
-    const prefill = new Float32Array((roleEmb.length + bodyEmb.length + 1) * HIDDEN)
-    let off = 0
-    for (const e of roleEmb) { prefill.set(e, off); off += HIDDEN }
-    for (const e of bodyEmb) { prefill.set(e, off); off += HIDDEN }
-    prefill.set(firstTextRow, off)
-
-    // trailing text tokens
-    const trailingIds = ids.slice(4)
-    const trailingEmb = trailingIds.map(id => {
-      const e = this.embedText([id])[0]
-      const r = new Float32Array(HIDDEN)
-      for (let i = 0; i < HIDDEN; i++) r[i] = e[i] + ttsPad[i]
-      return r
-    })
-
-    return { prefill, trailing: [...trailingEmb, ttsEos], ttsPad }
-  }
-
-  private async loadModel(path: string): Promise<CompiledModel> {
-    const resp = await fetch(path)
-    const buffer = await resp.arrayBuffer()
-    return loadAndCompile(new Uint8Array(buffer))
-  }
-
-  private async loadNpy(path: string): Promise<Float32Array> {
-    const resp = await fetch(path)
-    return parseNpy(await resp.arrayBuffer())
-  }
+async function raceWithSignal<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) throw new InferenceError('CANCELLED', 'Cancelled')
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(new InferenceError('CANCELLED', 'Cancelled'))
+    signal.addEventListener('abort', onAbort, { once: true })
+    promise.then(
+      v => { signal.removeEventListener('abort', onAbort); resolve(v) },
+      e => { signal.removeEventListener('abort', onAbort); reject(e) },
+    )
+  })
 }
