@@ -2,3 +2,8 @@ node_modules/
 dist/
 public/models/*.tflite
 docs/superpowers/
+static-models/
+*.tflite
+.vscode/
+.idea/
+*.code-workspace
