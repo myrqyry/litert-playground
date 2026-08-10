@@ -28,7 +28,7 @@ interface KokoroTtsLike {
   generate(
     text: string,
     config?: { voice?: string; speed?: number }
-  ): Promise<{ data: Float32Array; sampleRate: number }>;
+  ): Promise<{ audio: Float32Array; sampling_rate: number }>;
   list_voices(): void;
 }
 
@@ -87,8 +87,8 @@ export class KokoroPipeline
         speed: cfg.speed,
       });
       if (signal?.aborted) throw new Error("CANCELLED");
-      const samples = audio.data;
-      const sampleRate = audio.sampleRate || 24000;
+      const samples = audio.audio;
+      const sampleRate = audio.sampling_rate || 24000;
       const duration = samples.length / sampleRate;
       const warnings = checkAudioValid(samples, sampleRate, 1, duration);
       if (warnings.length > 0) {

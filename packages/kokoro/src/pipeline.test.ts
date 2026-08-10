@@ -25,8 +25,8 @@ describe("KokoroPipeline", () => {
   beforeEach(() => {
     mockGenerate.mockReset();
     mockGenerate.mockResolvedValue({
-      data: new Float32Array(24000).fill(0.5),
-      sampleRate: 24000,
+      audio: new Float32Array(24000).fill(0.5),
+      sampling_rate: 24000,
     });
   });
 

@@ -1,4 +1,5 @@
 export type Capability =
+  | 'text-generation'
   | 'text-to-speech'
   | 'speech-to-text'
   | 'image-generation'

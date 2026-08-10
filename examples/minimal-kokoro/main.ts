@@ -1,5 +1,4 @@
-import { createHttpAssetResolver } from '@litert-playground/inference-core'
-import { createLiteRtRuntime } from '@litert-playground/runtime-litert'
+import { createHttpAssetResolver, type RuntimeContext } from '@litert-playground/inference-core'
 import { KokoroPipeline } from '@litert-playground/kokoro'
 import './app.css'
 
@@ -38,9 +37,17 @@ async function play(samples: Float32Array, sampleRate: number): Promise<void> {
 async function load(): Promise<void> {
   try {
     const assets = createHttpAssetResolver('/models/kokoro/')
-    const runtime = await createLiteRtRuntime({ backend: 'wasm', assets })
-    await pipeline.load(runtime)
-    status.textContent = `Ready (${runtime.backend})`
+    const context: RuntimeContext = {
+      backend: 'wasm',
+      assets,
+      liteRt: {
+        loadModel: async () => { throw new Error('Kokoro does not use LiteRT models') },
+        loadNpy: async () => { throw new Error('Kokoro does not use NPY assets') },
+        fetchBuffer: async () => { throw new Error('Kokoro does not use LiteRT buffers') },
+      },
+    }
+    await pipeline.load(context)
+    status.textContent = 'Ready (wasm)'
     button.disabled = false
   } catch (cause) {
     status.textContent = 'Load failed'
