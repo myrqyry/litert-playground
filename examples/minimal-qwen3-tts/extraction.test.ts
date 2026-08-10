@@ -46,17 +46,19 @@ describe('minimal Qwen3-TTS extraction', () => {
 
   it('has a standalone browser entry without playground imports', () => {
     const source = readFileSync(new URL('./main.tsx', import.meta.url), 'utf8')
+    const viteConfig = readFileSync(new URL('../vite.config.ts', import.meta.url), 'utf8')
     expect(source).toContain('createHttpAssetResolver')
     expect(source).toContain('createCachingAssetResolver')
     expect(source).toContain('createLiteRtRuntime')
     expect(source).toContain('qwen3TtsManifest')
     expect(source).toContain('Qwen3TtsPipeline')
-    expect(source).toContain(
-      'https://huggingface.co/litert-community/Qwen3-TTS-12Hz-0.6B-Base/resolve/main/',
-    )
+    expect(source).toContain("const modelBase = '/models/qwen3-tts/'")
     expect(source).toContain('createLiteRtRuntime({ assets })')
     expect(source).not.toContain('assetBase: modelBase')
     expect(source).not.toMatch(/src\/App|registry|components\//)
+    expect(viteConfig).toContain("const modelPrefix = '/models/qwen3-tts/'")
+    expect(viteConfig).toContain("const modelRepository = 'litert-community/Qwen3-TTS-12Hz-0.6B-Base'")
+    expect(viteConfig).toContain('Readable.fromWeb(response.body).pipe(res)')
     expect(readFileSync(new URL('./index.html', import.meta.url), 'utf8')).toContain('main.tsx')
     void createHttpAssetResolver
     void createCachingAssetResolver

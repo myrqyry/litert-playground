@@ -5,8 +5,7 @@ import { createLiteRtRuntime } from '@litert-playground/runtime-litert'
 import { qwen3TtsManifest, Qwen3TtsPipeline } from '@litert-playground/qwen3-tts'
 import './app.css'
 
-const modelBase =
-  'https://huggingface.co/litert-community/Qwen3-TTS-12Hz-0.6B-Base/resolve/main/'
+const modelBase = '/models/qwen3-tts/'
 
 function formatBytes(bytes: number): string {
   return `${(bytes / 1_000_000_000).toFixed(2)} GB`

@@ -4,18 +4,25 @@
 
 The standalone Qwen3-TTS example uses the official
 `litert-community/Qwen3-TTS-12Hz-0.6B-Base` repository as its model asset
-source and keeps LiteRT runtime assets on their existing CDN path. This fixes
-the current missing-runtime boundary without changing the reusable runtime
-API.
+source and keeps LiteRT runtime assets on their existing CDN path. A narrow
+Vite middleware proxies model requests same-origin and follows Hugging Face
+redirects server-side. This fixes the current CORS and missing-runtime
+boundaries without changing the reusable runtime API.
 
 ## Asset boundaries
 
 The example creates two separate concerns:
 
-- The model resolver uses
-  `https://huggingface.co/litert-community/Qwen3-TTS-12Hz-0.6B-Base/resolve/main/`.
+- The browser model resolver uses `/models/qwen3-tts/`.
+- The Vite proxy rewrites that namespace to
+  `https://huggingface.co/litert-community/Qwen3-TTS-12Hz-0.6B-Base/resolve/main/`
+  and follows the Xet redirect before streaming the response back.
 - `createLiteRtRuntime()` receives no model URL as `assetBase`, so its existing
   LiteRT WASM CDN default remains active.
+
+Only `/models/qwen3-tts/` is proxied. The proxy forwards range and cache
+headers, rejects traversal paths, and does not copy model files into the
+repository.
 
 The model manifest remains aligned with the repository's host-side pipeline:
 the tokenizer, talker, MTP, codec, embedding tables, text projection, and

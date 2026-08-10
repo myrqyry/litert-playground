@@ -8,10 +8,11 @@ without conflating model assets with LiteRT WASM assets.
 
 **Architecture:** Keep `createLiteRtRuntime()` unchanged and let it load its
 existing LiteRT WASM CDN default. Configure the example's `AssetResolver` with
-the Hugging Face `resolve/main/` URL, then update the Qwen manifest with the
-repository's exact paths and byte sizes. Browser verification records each
-stage independently and updates the existing verification record only with
-observed results.
+the same-origin `/models/qwen3-tts/` namespace and add a narrow Vite middleware
+that follows Hugging Face redirects server-side and streams the final response.
+Update the Qwen manifest with the repository's exact paths and byte sizes.
+Browser verification records each stage independently and updates the existing
+verification record only with observed results.
 
 **Tech Stack:** TypeScript, pnpm workspaces, LiteRT JavaScript runtime,
 Vite, Vitest, browser automation, and Hugging Face model hosting.
@@ -22,6 +23,8 @@ Vite, Vitest, browser automation, and Hugging Face model hosting.
   asset source.
 - Keep LiteRT runtime assets on the existing CDN default.
 - Do not vendor the 2+ GB model assets into the repository.
+- Proxy only `/models/qwen3-tts/` and reject traversal paths.
+- Follow Hugging Face redirects server-side and preserve range metadata.
 - Do not claim model loading, compilation, inference, validated audio, or
   audible playback without exercising that stage in a browser.
 - Keep `text-gen` frozen and do not modify PodQast in this cycle.
@@ -119,54 +122,54 @@ git commit -m "fix: align Qwen TTS manifest with Hugging Face"
 
 **Files:**
 - Modify: `examples/minimal-qwen3-tts/main.tsx:8-30`
+- Modify: `examples/vite.config.ts`
 - Test: `examples/minimal-qwen3-tts/extraction.test.ts`
 
 **Interfaces:**
 - Consumes: `createHttpAssetResolver()`, `createCachingAssetResolver()`, and
   `createLiteRtRuntime()`.
-- Produces: a browser consumer that resolves model files from Hugging Face and
-  leaves LiteRT WASM resolution on its default CDN.
+- Produces: a browser consumer that resolves model files through the
+  same-origin proxy and leaves LiteRT WASM resolution on its default CDN.
 
-- [ ] **Step 1: Add an extraction assertion for the official model URL**
+- [ ] **Step 1: Add extraction assertions for the model proxy boundary**
 
-Extend the example extraction test to assert that the source contains the
-official repository URL and does not pass the model URL as `assetBase` to
+Extend the example extraction test to assert that the source uses the local
+model namespace and does not pass it as `assetBase` to
 `createLiteRtRuntime()`. Add these assertions after the existing resolver
 assertions:
 
 ```ts
-expect(source).toContain(
-  'https://huggingface.co/litert-community/Qwen3-TTS-12Hz-0.6B-Base/resolve/main/',
-)
+expect(source).toContain("const modelBase = '/models/qwen3-tts/'")
 expect(source).toContain('createLiteRtRuntime({ assets })')
 expect(source).not.toContain('assetBase: modelBase')
 ```
 
-- [ ] **Step 2: Change the model resolver base**
-
-Replace:
+- [ ] **Step 2: Configure the same-origin model resolver and proxy**
 
 ```ts
 const modelBase = '/models/qwen3-tts/'
 ```
 
-with:
-
-```ts
-const modelBase =
-  'https://huggingface.co/litert-community/Qwen3-TTS-12Hz-0.6B-Base/resolve/main/'
-```
-
 Keep `createHttpAssetResolver(modelBase)` and call the runtime without
-`assetBase`:
+`assetBase`. Add `qwenModelProxy()` to `examples/vite.config.ts` with these
+requirements:
+
+- Match only `/models/qwen3-tts/`.
+- Rewrite to the official Hugging Face `resolve/main/` URL.
+- Use server-side `fetch()` so the 302 to Xet is followed before responding.
+- Forward `Range`, `If-Range`, `If-None-Match`, and `If-Modified-Since`.
+- Stream the response body with `Readable.fromWeb()`.
+- Reject empty or traversal paths with status `400`.
+
+The example code remains:
 
 ```ts
 const assets = createCachingAssetResolver(createHttpAssetResolver(modelBase))
 const context = await createLiteRtRuntime({ assets })
 ```
 
-This makes model requests use Hugging Face while the runtime continues to use
-the default LiteRT CDN base.
+This makes model requests same-origin while the proxy uses Hugging Face and the
+runtime continues to use the default LiteRT CDN base.
 
 - [ ] **Step 3: Run example tests and typecheck**
 
@@ -177,7 +180,10 @@ pnpm --filter @litert-playground/example-qwen3-tts test --run
 pnpm --filter @litert-playground/example-qwen3-tts typecheck
 ```
 
-Expected: extraction tests and typecheck pass.
+Expected: extraction tests and typecheck pass. A local proxy request to
+`/models/qwen3-tts/tokenizer.json` returns HTTP 200 with the official byte
+length, and a range request to `talker_int4.tflite` returns HTTP 206 with
+`Content-Range`.
 
 - [ ] **Step 4: Commit the example deployment change**
 
