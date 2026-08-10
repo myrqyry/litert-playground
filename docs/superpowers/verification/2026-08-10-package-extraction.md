@@ -18,7 +18,7 @@ The repository does not contain the model assets required for browser inference.
 | Boundary | Kokoro | Qwen3-TTS |
 | --- | --- | --- |
 | Assets | untested | partial pass; speaker embedding untested |
-| Compile | untested | Talker pass; MTP pass; codec untested |
+| Compile | untested | Talker pass; MTP pass; codec blocker |
 | Inference | untested | untested |
 | Output | untested | untested |
 | Audible audio | untested | untested |
@@ -39,3 +39,45 @@ the ZIP64 text projection parsed successfully. Talker and MTP compiled
 successfully. The browser stalled at progress `loading: 6/7` while reaching the
 codec boundary; the process was aborted after the bounded wait. Inference,
 audio validation, and audible playback remain untested.
+
+### Codec compile blocker
+
+Isolated instrumentation of the codec graph established the following:
+
+- Codec compiles alone: pass. A fresh page that fetched
+  `codec_decoder_fp32.tflite` (456,820,324 bytes) and compiled only it
+  completed in 635 ms after a 229,667 ms fetch.
+- Codec stalls neither on fetch nor on compile by itself. Fetch always
+  completes (577-230 s depending on run); compilation in isolation succeeds.
+- Codec compile crashes the renderer whenever `talker_int4.tflite` and
+  `mtp_fp32.tflite` are already compiled in the same page. This reproduces both
+  in the isolated three-graph diagnostic (no embedding tables loaded) and in
+  the real pipeline load, so the pressure comes from the three compiled graphs'
+  accumulated memory, not from the embedding tables.
+- Hard evidence: the live diagnostic logged `codec compile start heap=`
+  `{"jsHeapUsedMB":497,"jsHeapTotalMB":497}` immediately before the renderer
+  crash. The JS heap is fully exhausted at the moment codec compilation begins.
+- Reordering load so all three graphs compile before any table loads does not
+  fix the crash; the graphs still accumulate in one page.
+- Raising the headless renderer V8 old-space budget does not help. The same
+  full three-graph diagnostic run with `--js-flags=--max-old-space-size=4096`
+  (all else identical) crashed at the exact same point with the exact same
+  heap values: `codec compile start heap={"jsHeapUsedMB":497,
+  "jsHeapTotalMB":497}` followed by a renderer process crash. The failure is a
+  renderer process crash, not a JavaScript heap out of memory error, so the
+  `--max-old-space-size` flag does not affect it. This falsifies the
+  "artificial headless heap cap" hypothesis for this stage.
+
+Side-by-side comparison:
+
+| Launch condition | talker | mtp | codec fetch | codec compile | heap before codec |
+|---|---|---|---|---|---|
+| Default headless heap | pass | pass | pass | renderer crash | 497/497 MB |
+| `--max-old-space-size=4096` | pass | pass | pass | renderer crash | 497/497 MB |
+
+Blocker state: `codec_decoder_fp32.tflite` cannot compile in the same WASM
+page as already-compiled INT4 talker and FP32 MTP graphs; the renderer
+process crashes at 497/497 MB JS heap, and this is not tunable via
+`--max-old-space-size`. Reaching the next stage (inference) requires either a
+memory-lighter codec path or a way to free compiled-graph memory between
+stages.

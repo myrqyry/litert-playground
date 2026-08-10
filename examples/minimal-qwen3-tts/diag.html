@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8" /><title>graph diag</title></head>
+<body>
+<pre id="out">running...</pre>
+<script type="module">
+  const out = document.getElementById('out')
+  const flush = () => {}
+  try {
+    const { runGraphDiag } = await import('/examples/minimal-qwen3-tts/graph-diag.ts')
+    const only = new URLSearchParams(location.search).get('only') ?? undefined
+    const result = await runGraphDiag(only)
+    out.textContent = JSON.stringify(result, null, 2)
+  } catch (e) {
+    out.textContent = 'FATAL: ' + (e instanceof Error ? e.stack : String(e))
+  }
+</script>
+</body>
+</html>
