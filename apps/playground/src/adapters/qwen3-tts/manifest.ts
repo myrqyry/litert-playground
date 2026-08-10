@@ -1,4 +1,4 @@
-import { type ModelAsset, type ModelManifest } from '../../core/types'
+import { type ModelAsset, type ModelManifest } from '@litert-playground/inference-core'
 
 const assets: ModelAsset[] = [
   { id: 'tokenizer', path: 'tokenizer.json', bytes: 2_600_000 },

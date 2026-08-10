@@ -50,7 +50,7 @@ export async function createLiteRtRuntime(options: LiteRtRuntimeOptions): Promis
     assets: options.assets,
     signal: options.signal,
     liteRt: {
-      async loadModel(path: string): Promise<unknown> {
+      async loadModel(path: string): Promise<any> {
         const buffer = await options.assets.resolve({ id: path, path }, { signal: options.signal })
         try {
           return await loadAndCompile(new Uint8Array(buffer), { accelerator: backend })

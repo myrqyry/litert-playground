@@ -5,11 +5,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "dev": "pnpm --filter playground dev",
+    "build": "pnpm --filter playground build",
+    "preview": "pnpm --filter playground preview",
+    "test": "pnpm --filter playground test",
+    "test:watch": "pnpm --filter playground test:watch",
+    "typecheck": "pnpm --filter playground typecheck"
   },
   "keywords": [],
   "author": "",

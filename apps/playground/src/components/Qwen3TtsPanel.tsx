@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { Qwen3TtsPipeline, type QwenTtsConfig } from '../adapters/qwen3-tts/pipeline'
-import { createHttpAssetResolver } from '../assets/http-resolver'
-import { createRuntimeContext } from '../runtime/context'
-import type { PipelineProgress } from '../core/types'
+import { createHttpAssetResolver } from '@litert-playground/inference-core'
+import { createLiteRtRuntime } from '@litert-playground/runtime-litert'
+import type { PipelineProgress } from '@litert-playground/inference-core'
 
 let pipeline: Qwen3TtsPipeline | null = null
 
@@ -41,7 +41,7 @@ export function Qwen3TtsPanel() {
     }
 
     const assets = createHttpAssetResolver('/models/qwen3-tts/')
-    createRuntimeContext('/models/qwen3-tts', assets)
+    createLiteRtRuntime({ assetBase: '/models/qwen3-tts', assets })
       .then(ctx => p.load(ctx))
       .then(() => { pipeline = p; setStatus('Ready'); setError(null) })
       .catch((e: unknown) => { setStatus('Load failed'); setError(String(e)) })

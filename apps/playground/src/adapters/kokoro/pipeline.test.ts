@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { RuntimeContext } from "../../core/types";
+import type { RuntimeContext } from '@litert-playground/inference-core';
 import { KokoroPipeline } from "./pipeline";
 
 const { mockGenerate } = vi.hoisted(() => ({ mockGenerate: vi.fn() }));

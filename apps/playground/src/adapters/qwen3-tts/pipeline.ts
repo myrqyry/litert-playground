@@ -15,8 +15,8 @@ import {
   type AudioInferenceResult,
   type InferenceReceipt,
   InferenceError,
-} from '../../core/types'
-import { checkAudioValid } from '../../core/validation'
+  checkAudioValid,
+} from '@litert-playground/inference-core'
 
 const HIDDEN = 1024
 const CODEC_VOCAB = 3072
@@ -109,9 +109,9 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
        this.codecModel = await context.liteRt.loadModel('codec_decoder_fp32.tflite')
        compileMs = performance.now() - compileStart
 
-      this.talker = new Talker(this.talkerModel)
-      this.mtp = new MTP(this.mtpModel, { mtpEmbeddings: this.mtpEmb, codecEmbeddings: this.codecEmb })
-      this.codec = new CodecDecoder(this.codecModel)
+      this.talker = new Talker(this.talkerModel!)
+      this.mtp = new MTP(this.mtpModel!, { mtpEmbeddings: this.mtpEmb, codecEmbeddings: this.codecEmb })
+      this.codec = new CodecDecoder(this.codecModel!)
        this.report({ phase: 'loading', step: 7, total: 7 })
        this.status = 'ready'
        this.loadMs = performance.now() - loadStart
@@ -134,7 +134,7 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
       const voicePath = `voices/${config.voice}.npy`
 
       const inferenceStart = performance.now()
-      const speakerBuf = await ctx.assets.resolve({ id: 'voice', path: voicePath, optional: true }, signal)
+      const speakerBuf = await ctx.assets.resolve({ id: 'voice', path: voicePath, optional: true }, { signal })
 
       const speakerEmb = parseNpy(speakerBuf)
 

@@ -1,4 +1,4 @@
-import type { AudioInferenceResult } from "../core/types";
+import type { AudioInferenceResult } from '@litert-playground/inference-core';
 import type { KokoroPipeline } from "./kokoro/pipeline";
 import type { Qwen3TtsPipeline } from "./qwen3-tts/pipeline";
 

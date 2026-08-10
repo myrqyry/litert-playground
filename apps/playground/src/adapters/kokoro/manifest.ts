@@ -1,4 +1,4 @@
-import { type ModelAsset, type ModelManifest } from "../../core/types";
+import { type ModelAsset, type ModelManifest } from '@litert-playground/inference-core';
 
 export const kokoroManifest: ModelManifest = {
   modelId: "kokoro-82m-v1.0",

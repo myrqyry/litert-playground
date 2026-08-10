@@ -13,7 +13,8 @@ vi.mock('./npy-parser', () => ({
   parseNpy: () => new Float32Array(1024),
   parseNpz: vi.fn(),
 }))
-vi.mock('../../core/validation', () => ({
+vi.mock('@litert-playground/inference-core', async () => ({
+  ...(await vi.importActual<typeof import('@litert-playground/inference-core')>('@litert-playground/inference-core')),
   checkAudioValid: () => ['audio warning'],
 }))
 
@@ -56,7 +57,7 @@ describe('Qwen3TtsPipeline receipts', () => {
     expect(result.receipt.outputSummary).toContain('24000Hz')
     expect(result.receipt.warnings).toEqual(['audio warning'])
     expect(assets.resolve).toHaveBeenCalledWith(
-      { id: 'voice', path: 'voices/demo_speaker.npy', optional: true }, signal,
+      { id: 'voice', path: 'voices/demo_speaker.npy', optional: true }, { signal },
     )
   })
 })

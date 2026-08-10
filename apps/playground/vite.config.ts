@@ -34,7 +34,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         playground: path.resolve('index.html'),
-        qwen3Tts: path.resolve('examples/minimal-qwen3-tts/index.html'),
       },
     },
   },

@@ -50,7 +50,7 @@ export interface RuntimeContext {
 }
 
 export interface LiteRtRuntime {
-  loadModel(path: string): Promise<unknown>
+  loadModel(path: string): Promise<any>
   loadNpy(path: string): Promise<Float32Array>
   fetchBuffer(path: string): Promise<ArrayBuffer>
 }
@@ -111,7 +111,7 @@ export interface EmbeddingInferenceResult {
 
 export interface TensorInferenceResult {
   kind: 'tensor'
-  tensors: Record<string, unknown>
+  tensors: Record<string, any>
 }
 
 export interface ModelManifest {

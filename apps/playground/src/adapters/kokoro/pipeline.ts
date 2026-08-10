@@ -5,8 +5,8 @@ import {
   type PipelineProgress,
   type PipelineStatus,
   type RuntimeContext,
-} from "../../core/types";
-import { checkAudioValid } from "../../core/validation";
+} from '@litert-playground/inference-core';
+import { checkAudioValid } from '@litert-playground/inference-core';
 import { kokoroManifest } from "./manifest";
 
 export interface KokoroInput {
