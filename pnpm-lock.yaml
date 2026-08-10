@@ -253,6 +253,9 @@ importers:
       '@litert-playground/inference-core':
         specifier: workspace:*
         version: link:../../packages/inference-core
+      '@litert-playground/kokoro':
+        specifier: workspace:*
+        version: link:../../packages/kokoro
       '@litert-playground/runtime-litert':
         specifier: workspace:*
         version: link:../../packages/runtime-litert
@@ -298,6 +301,22 @@ importers:
         version: 4.1.10(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(jiti@2.7.0))
 
   packages/inference-core:
+    devDependencies:
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(jiti@2.7.0))
+
+  packages/kokoro:
+    dependencies:
+      '@litert-playground/inference-core':
+        specifier: workspace:*
+        version: link:../inference-core
+      kokoro-js:
+        specifier: ^1.2.1
+        version: 1.2.1
     devDependencies:
       typescript:
         specifier: ^7.0.2
