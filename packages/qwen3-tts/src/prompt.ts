@@ -9,6 +9,12 @@ const TTS_PAD = 151671
 const TTS_BOS = 151672
 const TTS_EOS = 151673
 
+export interface TextEmbeddingRows {
+  readonly length: number
+  readonly width: number
+  row(index: number): Float32Array
+}
+
 export interface PromptResult {
   prefill: Float32Array
   trailing: Float32Array[]
@@ -21,15 +27,19 @@ export function buildPrompt(
   langId: number,
   tokenizer: { encode(text: string): number[] },
   codecEmb: Float32Array,
-  textEmbData: Float32Array,
+  textEmbData: Float32Array | TextEmbeddingRows,
   project: (row: Float32Array) => Float32Array,
 ): PromptResult {
   const ids = tokenizer.encode(`<|im_start|>assistant\n${text}<|im_end|>\n<|im_start|>assistant\n`)
 
   const embed = (id: number) => {
-    const base = id * HIDDEN
-    if (base + HIDDEN > textEmbData.length) return new Float32Array(HIDDEN)
-    return project(textEmbData.slice(base, base + HIDDEN))
+    if (textEmbData instanceof Float32Array) {
+      const base = id * HIDDEN
+      if (base + HIDDEN > textEmbData.length) return new Float32Array(HIDDEN)
+      return project(textEmbData.slice(base, base + HIDDEN))
+    }
+    if ((id + 1) * textEmbData.width > textEmbData.length) return new Float32Array(HIDDEN)
+    return project(textEmbData.row(id))
   }
 
   const ttsBos = embed(TTS_BOS)

@@ -1,6 +1,6 @@
 import type { AudioInferenceResult } from '@litert-playground/inference-core';
 import type { KokoroPipeline } from '@litert-playground/kokoro';
-import type { Qwen3TtsPipeline } from "./qwen3-tts/pipeline";
+import type { Qwen3TtsPipeline } from '@litert-playground/qwen3-tts';
 
 export interface PodcastTts {
   synthesize(text: string, voice: string, signal?: AbortSignal): Promise<AudioInferenceResult>;

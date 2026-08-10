@@ -34,6 +34,7 @@ describe('Qwen3TtsPipeline receipts', () => {
     internals.codecEmb = new Float32Array(2048)
     internals.mtpEmb = new Float32Array(0)
     internals.talker = {
+      createEmptyKv: vi.fn().mockReturnValue({}),
       prefill: vi.fn().mockResolvedValue({
         logits: new Float32Array(3072), hidden: new Float32Array(1024), kvCache: {},
       }),

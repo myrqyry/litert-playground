@@ -15,6 +15,7 @@
     "@litert-playground/inference-core": "workspace:*",
     "@litert-playground/kokoro": "workspace:*",
     "@litert-playground/runtime-litert": "workspace:*",
+    "@litert-playground/qwen3-tts": "workspace:*",
     "@litertjs/core": "^2.5.3",
     "@tailwindcss/vite": "^4.3.3",
     "kokoro-js": "^1.2.1",

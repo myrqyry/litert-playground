@@ -6,7 +6,7 @@ import { CodecDecoder } from './codec'
 import { sample, SampleOpts } from './sampler'
 import { parseNpy, parseNpz } from './npy-parser'
 import { buildPrompt } from './prompt'
-import { qwen3TtsManifest } from './manifest'
+import { createQwen3TtsManifest, qwen3TtsVariants, type Qwen3TtsVariant } from './manifest'
 import {
   type Pipeline,
   type PipelineStatus,
@@ -17,6 +17,8 @@ import {
   InferenceError,
   checkAudioValid,
 } from '@litert-playground/inference-core'
+import { discoverCodecShapes, discoverMtpShapes, discoverTalkerShapes } from './shape-discovery'
+import { parseFp16Npy, type Fp16Table } from './fp16-table'
 
 const HIDDEN = 1024
 const CODEC_VOCAB = 3072
@@ -47,7 +49,7 @@ const DEFAULTS: QwenTtsConfig = {
 }
 
 export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceResult, QwenTtsConfig> {
-  readonly manifest = qwen3TtsManifest
+  readonly manifest
   status: PipelineStatus = 'idle'
 
   onProgress?: (progress: PipelineProgress) => void
@@ -59,7 +61,7 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
   private codec!: CodecDecoder
   private codecEmb!: Float32Array
   private mtpEmb!: Float32Array
-  private textEmbData!: Float32Array
+  private textEmbData!: Fp16Table
   private projW1!: Float32Array
   private projB1!: Float32Array
   private projW2!: Float32Array
@@ -69,6 +71,10 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
   private codecModel: CompiledModel | null = null
   private loadMs = 0
   private compileMs = 0
+
+  constructor(private readonly variant: Qwen3TtsVariant = qwen3TtsVariants.fp32) {
+    this.manifest = createQwen3TtsManifest(variant)
+  }
 
   async load(context: RuntimeContext): Promise<void> {
     if (this.status === 'ready') return
@@ -90,7 +96,7 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
       this.mtpEmb = await context.liteRt.loadNpy('tables/mtp_embeddings_fp16.npy')
       this.report({ phase: 'loading', step: 3, total: 7 })
 
-      this.textEmbData = await context.liteRt.loadNpy('tables/text_embedding_fp16.npy')
+       this.textEmbData = parseFp16Npy(await context.liteRt.fetchBuffer('tables/text_embedding_fp16.npy'))
       this.report({ phase: 'loading', step: 4, total: 7 })
 
       const projBuf = await context.assets.resolve({ id: 'text-projection', path: 'tables/text_projection_fp32.npz' })
@@ -102,16 +108,24 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
       this.report({ phase: 'loading', step: 5, total: 7 })
 
        const compileStart = performance.now()
-       this.talkerModel = await context.liteRt.loadModel('talker_fp32.tflite')
+       this.talkerModel = await context.liteRt.loadModel(this.variant.talker)
        this.report({ phase: 'loading', step: 6, total: 7 })
 
-       this.mtpModel = await context.liteRt.loadModel('mtp_fp32.tflite')
-       this.codecModel = await context.liteRt.loadModel('codec_decoder_fp32.tflite')
+       this.mtpModel = await context.liteRt.loadModel(this.variant.mtp)
+       this.codecModel = await context.liteRt.loadModel(this.variant.codec)
        compileMs = performance.now() - compileStart
 
-      this.talker = new Talker(this.talkerModel!)
-      this.mtp = new MTP(this.mtpModel!, { mtpEmbeddings: this.mtpEmb, codecEmbeddings: this.codecEmb })
-      this.codec = new CodecDecoder(this.codecModel!)
+       const talkerShapes = discoverTalkerShapes(this.talkerModel!)
+       const mtpShapes = discoverMtpShapes(this.mtpModel!)
+       const codecShapes = discoverCodecShapes(this.codecModel!)
+       this.talker = new Talker(this.talkerModel!, talkerShapes)
+       this.mtp = new MTP(this.mtpModel!, {
+         mtpEmbeddings: this.mtpEmb,
+         codecEmbeddings: this.codecEmb,
+         numCacheSlots: mtpShapes.cacheLen,
+         cacheShape: mtpShapes.kvShape,
+       })
+       this.codec = new CodecDecoder(this.codecModel!, { chunkSize: codecShapes.chunkSize })
        this.report({ phase: 'loading', step: 7, total: 7 })
        this.status = 'ready'
        this.loadMs = performance.now() - loadStart
@@ -146,7 +160,7 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
       if (signal?.aborted) throw new InferenceError('CANCELLED', 'Cancelled before prefill')
 
       this.report({ phase: 'prefill', step: 0, total: 1 })
-      const kv: Record<string, import('@litertjs/core').Tensor> = {}
+      const kv = this.talker.createEmptyKv()
       const sl = prefill.length / HIDDEN
       const { logits, hidden, kvCache } = await this.talker.prefill(prefill, kv, sl)
 
@@ -286,10 +300,11 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
 
   private projectText(row: Float32Array): Float32Array {
     const hiddenDim = HIDDEN * 4
+    const inputDim = this.projW1.length / hiddenDim
     const h = new Float32Array(hiddenDim)
     for (let i = 0; i < hiddenDim; i++) {
       let sum = 0
-      for (let j = 0; j < HIDDEN; j++) sum += this.projW1[j * hiddenDim + i] * row[j]
+      for (let j = 0; j < inputDim; j++) sum += this.projW1[j * hiddenDim + i] * row[j]
       h[i] = this.silu(sum + this.projB1[i])
     }
     const out = new Float32Array(HIDDEN)

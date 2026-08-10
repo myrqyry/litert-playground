@@ -12,6 +12,7 @@ export interface MTPConfig {
   codecEmbeddings: Float32Array
   numCacheSlots?: number
   numCodebooks?: number
+  cacheShape?: number[]
 }
 
 export class MTP {
@@ -19,6 +20,7 @@ export class MTP {
   private codecEmb: Float32Array
   private numCacheSlots: number
   private numCodebooks: number
+  private cacheShape: number[]
 
   constructor(
     private model: CompiledModel,
@@ -28,6 +30,7 @@ export class MTP {
     this.codecEmb = config.codecEmbeddings
     this.numCacheSlots = config.numCacheSlots ?? MTP_CACHE_SLOTS
     this.numCodebooks = config.numCodebooks ?? MTP_CODEBOOKS
+    this.cacheShape = config.cacheShape ?? [1, this.numCacheSlots, HIDDEN]
   }
 
   async predict(
@@ -42,8 +45,9 @@ export class MTP {
       prevTokens: [],
     }
 
-    const kAll = new Float32Array(this.numCacheSlots * HIDDEN)
-    const vAll = new Float32Array(this.numCacheSlots * HIDDEN)
+    const cacheSize = this.cacheShape.reduce((a, b) => a * b, 1)
+    const kAll = new Float32Array(cacheSize)
+    const vAll = new Float32Array(cacheSize)
 
     const codes: number[] = []
 
@@ -67,8 +71,8 @@ export class MTP {
         'args_0': new Tensor(embed, [1, 1, HIDDEN]),
         'args_1': new Tensor(new Int32Array([t]), [1]),
         'args_2': new Tensor(mask, [1, 1, 1, this.numCacheSlots]),
-        'args_3': new Tensor(kAll, [1, this.numCacheSlots, HIDDEN]),
-        'args_4': new Tensor(vAll, [1, this.numCacheSlots, HIDDEN]),
+        'args_3': new Tensor(kAll, this.cacheShape),
+        'args_4': new Tensor(vAll, this.cacheShape),
       }
 
       const result = await this.model.run(inputs)

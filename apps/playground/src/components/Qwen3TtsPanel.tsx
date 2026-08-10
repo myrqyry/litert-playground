@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Qwen3TtsPipeline, type QwenTtsConfig } from '../adapters/qwen3-tts/pipeline'
+import { Qwen3TtsPipeline, type QwenTtsConfig } from '@litert-playground/qwen3-tts'
 import { createHttpAssetResolver } from '@litert-playground/inference-core'
 import { createLiteRtRuntime } from '@litert-playground/runtime-litert'
 import type { PipelineProgress } from '@litert-playground/inference-core'

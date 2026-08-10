@@ -256,6 +256,9 @@ importers:
       '@litert-playground/kokoro':
         specifier: workspace:*
         version: link:../../packages/kokoro
+      '@litert-playground/qwen3-tts':
+        specifier: workspace:*
+        version: link:../../packages/qwen3-tts
       '@litert-playground/runtime-litert':
         specifier: workspace:*
         version: link:../../packages/runtime-litert
@@ -317,6 +320,22 @@ importers:
       kokoro-js:
         specifier: ^1.2.1
         version: 1.2.1
+    devDependencies:
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(jiti@2.7.0))
+
+  packages/qwen3-tts:
+    dependencies:
+      '@litert-playground/inference-core':
+        specifier: workspace:*
+        version: link:../inference-core
+      '@litertjs/core':
+        specifier: ^2.5.3
+        version: 2.5.3
     devDependencies:
       typescript:
         specifier: ^7.0.2
