@@ -1,8 +1,11 @@
 // Minimal extraction test: can import Qwen3TTS without the playground
 // Run: npx vitest run src/core/validation.test.ts src/adapters/qwen3-tts/pipeline.test.ts
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { Qwen3TtsPipeline, type QwenTtsInput, type QwenTtsConfig } from '../../src/adapters/qwen3-tts/pipeline'
-import { createHttpAssetResolver } from '../../src/assets/http-resolver'
+import { createCachingAssetResolver, createHttpAssetResolver } from '../../src/assets/http-resolver'
+import { createRuntimeContext } from '../../src/runtime/context'
+import { qwen3TtsManifest } from '../../src/adapters/qwen3-tts/manifest'
 
 describe('minimal Qwen3-TTS extraction', () => {
   it('creates pipeline with manifest', () => {
@@ -40,5 +43,20 @@ describe('minimal Qwen3-TTS extraction', () => {
     expect(typeof p.dispose).toBe('function')
     expect(p.manifest).toBeDefined()
     expect(p.status).toBeDefined()
+  })
+
+  it('has a standalone browser entry without playground imports', () => {
+    const source = readFileSync(new URL('./main.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('createHttpAssetResolver')
+    expect(source).toContain('createCachingAssetResolver')
+    expect(source).toContain('createRuntimeContext')
+    expect(source).toContain('qwen3TtsManifest')
+    expect(source).toContain('Qwen3TtsPipeline')
+    expect(source).not.toMatch(/src\/App|registry|components\//)
+    expect(readFileSync(new URL('./index.html', import.meta.url), 'utf8')).toContain('main.tsx')
+    void createHttpAssetResolver
+    void createCachingAssetResolver
+    void createRuntimeContext
+    void qwen3TtsManifest
   })
 })
