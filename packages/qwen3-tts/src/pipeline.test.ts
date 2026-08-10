@@ -9,7 +9,7 @@ describe('Qwen3TtsPipeline', () => {
 
   it('has correct manifest', () => {
     const p = new Qwen3TtsPipeline()
-    expect(p.manifest.modelId).toBe('qwen3-tts-0.6b')
+    expect(p.manifest.modelId).toBe('qwen3-tts-12hz-0.6b-base')
     expect(p.manifest.capabilities).toContain('text-to-speech')
   })
 

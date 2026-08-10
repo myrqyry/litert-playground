@@ -9,7 +9,7 @@ import { Qwen3TtsPipeline, qwen3TtsManifest, type QwenTtsInput, type QwenTtsConf
 describe('minimal Qwen3-TTS extraction', () => {
   it('creates pipeline with manifest', () => {
     const p = new Qwen3TtsPipeline()
-    expect(p.manifest.modelId).toBe('qwen3-tts-0.6b')
+    expect(p.manifest.modelId).toBe('qwen3-tts-12hz-0.6b-base')
     expect(p.manifest.version).toBe('0.4.0')
     expect(p.manifest.capabilities).toEqual(['text-to-speech'])
     expect(p.manifest.backends.wasm).toBe(true)

@@ -49,7 +49,7 @@ describe('Qwen3TtsPipeline receipts', () => {
     const result = await pipeline.run({ text: 'hello' }, { maxFrames: 1 }, signal)
 
     expect(result.kind).toBe('audio')
-    expect(result.receipt.modelId).toBe('qwen3-tts-0.6b')
+    expect(result.receipt.modelId).toBe('qwen3-tts-12hz-0.6b-base')
     expect(result.receipt.pipelineVersion).toBe('0.4.0')
     expect(result.receipt.backend).toBe('webgpu')
     expect(Number.isNaN(Date.parse(result.receipt.timestamp))).toBe(false)

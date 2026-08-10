@@ -33,6 +33,9 @@ Vite, Vitest, browser automation, and Hugging Face model hosting.
 **Files:**
 - Modify: `packages/qwen3-tts/src/manifest.ts`
 - Test: `packages/qwen3-tts/src/manifest.test.ts`
+- Update expectations: `packages/qwen3-tts/src/pipeline.test.ts`,
+  `packages/qwen3-tts/src/receipt.test.ts`,
+  `examples/minimal-qwen3-tts/extraction.test.ts`
 
 **Interfaces:**
 - Consumes: `Qwen3TtsVariant`, `createQwen3TtsManifest()`, and the existing
@@ -106,7 +109,9 @@ Expected: all Qwen tests pass and the package type-checks.
 - [ ] **Step 4: Commit the manifest update**
 
 ```bash
-git add packages/qwen3-tts/src/manifest.ts packages/qwen3-tts/src/manifest.test.ts
+git add packages/qwen3-tts/src/manifest.ts packages/qwen3-tts/src/manifest.test.ts \
+  packages/qwen3-tts/src/pipeline.test.ts packages/qwen3-tts/src/receipt.test.ts \
+  examples/minimal-qwen3-tts/extraction.test.ts
 git commit -m "fix: align Qwen TTS manifest with Hugging Face"
 ```
 

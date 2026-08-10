@@ -22,15 +22,15 @@ export const qwen3TtsVariants: Record<string, Qwen3TtsVariant> = {
 
 function assetsFor(variant: Qwen3TtsVariant): ModelAsset[] {
   return [
-  { id: 'tokenizer', path: 'tokenizer.json', bytes: 2_600_000 },
-  { id: 'talker', path: variant.talker },
-  { id: 'mtp', path: variant.mtp, bytes: 2_000_000_000 },
-  { id: 'codec-decoder', path: variant.codec, bytes: 200_000_000 },
-  { id: 'codec-embedding', path: 'tables/codec_embedding_fp32.npy', bytes: 25_000_000 },
-  { id: 'mtp-embeddings', path: 'tables/mtp_embeddings_fp16.npy', bytes: 86_000_000 },
-  { id: 'text-embedding', path: 'tables/text_embedding_fp16.npy', bytes: 1_200_000_000 },
-  { id: 'text-projection', path: 'tables/text_projection_fp32.npz', bytes: 13_000_000 },
-  { id: 'voice', path: 'voices/demo_speaker.npy', bytes: 4_000_000, optional: true },
+   { id: 'tokenizer', path: 'tokenizer.json', bytes: 11_424_262 },
+   { id: 'talker', path: variant.talker, bytes: variant.id === 'fp32' ? 1_783_890_064 : 255_998_768 },
+   { id: 'mtp', path: variant.mtp, bytes: 440_526_692 },
+   { id: 'codec-decoder', path: variant.codec, bytes: 456_820_324 },
+   { id: 'codec-embedding', path: 'tables/codec_embedding_fp32.npy', bytes: 12_583_040 },
+   { id: 'mtp-embeddings', path: 'tables/mtp_embeddings_fp16.npy', bytes: 62_914_688 },
+   { id: 'text-embedding', path: 'tables/text_embedding_fp16.npy', bytes: 622_329_984 },
+   { id: 'text-projection', path: 'tables/text_projection_fp32.npz', bytes: 25_179_078 },
+   { id: 'voice', path: 'voices/demo_speaker.npy', bytes: 4_224, optional: true },
   ]
 }
 
@@ -40,7 +40,7 @@ export function createQwen3TtsManifest(variant: Qwen3TtsVariant = qwen3TtsVarian
     .filter(asset => !asset.optional)
     .reduce((total, asset) => total + (asset.bytes ?? 0), 0)
   return {
-  modelId: 'qwen3-tts-0.6b',
+   modelId: 'qwen3-tts-12hz-0.6b-base',
   name: `Qwen3-TTS 0.6B (${variant.quantization})`,
   version: '0.4.0',
   capabilities: ['text-to-speech'],
