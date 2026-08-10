@@ -51,6 +51,11 @@ describe('minimal Qwen3-TTS extraction', () => {
     expect(source).toContain('createLiteRtRuntime')
     expect(source).toContain('qwen3TtsManifest')
     expect(source).toContain('Qwen3TtsPipeline')
+    expect(source).toContain(
+      'https://huggingface.co/litert-community/Qwen3-TTS-12Hz-0.6B-Base/resolve/main/',
+    )
+    expect(source).toContain('createLiteRtRuntime({ assets })')
+    expect(source).not.toContain('assetBase: modelBase')
     expect(source).not.toMatch(/src\/App|registry|components\//)
     expect(readFileSync(new URL('./index.html', import.meta.url), 'utf8')).toContain('main.tsx')
     void createHttpAssetResolver
