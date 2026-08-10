@@ -49,7 +49,7 @@ describe('createRuntimeContext', () => {
     })
     vi.mocked(loadAndCompile)
       .mockRejectedValueOnce(new Error('gpu compile failed'))
-      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({} as never)
     const assets = { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(1)) }
     const context = await createRuntimeContext('https://assets.test/qwen/', assets)
 

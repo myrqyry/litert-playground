@@ -67,11 +67,15 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
   private talkerModel: CompiledModel | null = null
   private mtpModel: CompiledModel | null = null
   private codecModel: CompiledModel | null = null
+  private loadMs = 0
+  private compileMs = 0
 
   async load(context: RuntimeContext): Promise<void> {
     if (this.status === 'ready') return
     this.status = 'loading'
     this.context = context
+    const loadStart = performance.now()
+    let compileMs = 0
 
     try {
       this.report({ phase: 'loading', step: 0, total: 7 })
@@ -97,17 +101,21 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
       this.projB2 = proj['b2'] as Float32Array
       this.report({ phase: 'loading', step: 5, total: 7 })
 
-      this.talkerModel = await context.liteRt.loadModel('talker_fp32.tflite')
-      this.report({ phase: 'loading', step: 6, total: 7 })
+       const compileStart = performance.now()
+       this.talkerModel = await context.liteRt.loadModel('talker_fp32.tflite')
+       this.report({ phase: 'loading', step: 6, total: 7 })
 
-      this.mtpModel = await context.liteRt.loadModel('mtp_fp32.tflite')
-      this.codecModel = await context.liteRt.loadModel('codec_decoder_fp32.tflite')
+       this.mtpModel = await context.liteRt.loadModel('mtp_fp32.tflite')
+       this.codecModel = await context.liteRt.loadModel('codec_decoder_fp32.tflite')
+       compileMs = performance.now() - compileStart
 
       this.talker = new Talker(this.talkerModel)
       this.mtp = new MTP(this.mtpModel, { mtpEmbeddings: this.mtpEmb, codecEmbeddings: this.codecEmb })
       this.codec = new CodecDecoder(this.codecModel)
-      this.report({ phase: 'loading', step: 7, total: 7 })
-      this.status = 'ready'
+       this.report({ phase: 'loading', step: 7, total: 7 })
+       this.status = 'ready'
+       this.loadMs = performance.now() - loadStart
+       this.compileMs = compileMs
     } catch (e) {
       this.status = 'error'
       throw e instanceof InferenceError ? e : new InferenceError('MODEL_COMPILE_FAILED', String(e), { cause: e })
@@ -125,9 +133,8 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
       const lang = LANGUAGE_IDS[config.language || 'english'] || LANGUAGE_IDS.english
       const voicePath = `voices/${config.voice}.npy`
 
-      const speakerBuf = signal
-        ? await raceWithSignal(ctx.assets.resolve({ id: 'voice', path: voicePath, optional: true }), signal)
-        : await ctx.assets.resolve({ id: 'voice', path: voicePath, optional: true })
+      const inferenceStart = performance.now()
+      const speakerBuf = await ctx.assets.resolve({ id: 'voice', path: voicePath, optional: true }, signal)
 
       const speakerEmb = parseNpy(speakerBuf)
 
@@ -205,8 +212,12 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
       }
 
       if (allFrames.length === 0) {
+        const samples = new Float32Array(0)
         this.status = 'ready'
-        return { kind: 'audio', samples: new Float32Array(0), sampleRate: 24000, channels: 1, durationSeconds: 0 }
+        return {
+          kind: 'audio', samples, sampleRate: 24000, channels: 1, durationSeconds: 0,
+          receipt: this.createReceipt(inferenceStart, input.text, samples, 24000, 1, []),
+        }
       }
 
       this.report({ phase: 'codec', step: 0, total: 1 })
@@ -222,7 +233,10 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
       }
 
       this.status = 'ready'
-      return { kind: 'audio', samples: audio, sampleRate: 24000, channels: 1, durationSeconds: duration }
+      return {
+        kind: 'audio', samples: audio, sampleRate: 24000, channels: 1, durationSeconds: duration,
+        receipt: this.createReceipt(inferenceStart, input.text, audio, 24000, 1, warnings),
+      }
     } catch (e) {
       this.status = 'ready'
       throw e instanceof InferenceError ? e : new InferenceError('INFERENCE_FAILED', String(e), { cause: e })
@@ -238,16 +252,25 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
     this.status = 'disposed'
   }
 
-  createReceipt(elapsed: { loadMs: number; compileMs: number; inferenceMs: number }, inputSummary: string, outputSummary: string): InferenceReceipt {
+  private createReceipt(
+    inferenceStart: number,
+    input: string,
+    samples: Float32Array,
+    sampleRate: number,
+    channels: number,
+    warnings: string[],
+  ): InferenceReceipt {
     return {
       modelId: this.manifest.modelId,
       pipelineVersion: this.manifest.version,
       backend: this.context?.backend || 'wasm',
       timestamp: new Date().toISOString(),
-      ...elapsed,
-      inputSummary,
-      outputSummary,
-      warnings: [],
+      loadMs: this.loadMs,
+      compileMs: this.compileMs,
+      inferenceMs: performance.now() - inferenceStart,
+      inputSummary: `${input.length} characters`,
+      outputSummary: `${samples.length} samples at ${sampleRate}Hz, ${channels} channel${channels === 1 ? '' : 's'}`,
+      warnings,
     }
   }
 
@@ -277,16 +300,4 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
     }
     return out
   }
-}
-
-async function raceWithSignal<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) throw new InferenceError('CANCELLED', 'Cancelled')
-  return new Promise((resolve, reject) => {
-    const onAbort = () => reject(new InferenceError('CANCELLED', 'Cancelled'))
-    signal.addEventListener('abort', onAbort, { once: true })
-    promise.then(
-      v => { signal.removeEventListener('abort', onAbort); resolve(v) },
-      e => { signal.removeEventListener('abort', onAbort); reject(e) },
-    )
-  })
 }
