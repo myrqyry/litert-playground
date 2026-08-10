@@ -2,17 +2,17 @@ import { createRoot } from 'react-dom/client'
 import { useEffect, useState } from 'react'
 import { createCachingAssetResolver, createHttpAssetResolver, type AudioInferenceResult, type PipelineProgress } from '@litert-playground/inference-core'
 import { createLiteRtRuntime } from '@litert-playground/runtime-litert'
-import { qwen3TtsManifest, Qwen3TtsPipeline } from '@litert-playground/qwen3-tts'
+import { qwen3TtsVariants, Qwen3TtsPipeline } from '@litert-playground/qwen3-tts'
 import './app.css'
 
-const modelBase = '/models/qwen3-tts/'
+const modelBase = new URL('/models/qwen3-tts/', window.location.href).href
 
 function formatBytes(bytes: number): string {
   return `${(bytes / 1_000_000_000).toFixed(2)} GB`
 }
 
 export function App() {
-  const [pipeline] = useState(() => new Qwen3TtsPipeline())
+  const [pipeline] = useState(() => new Qwen3TtsPipeline(qwen3TtsVariants.int4))
   const [status, setStatus] = useState(pipeline.status)
   const [progress, setProgress] = useState<PipelineProgress | null>(null)
   const [backend, setBackend] = useState<string>('detecting')
@@ -76,8 +76,8 @@ export function App() {
         <p className="lede">A standalone runtime proof: real assets, automatic backend selection, and playable audio.</p>
       </header>
       <section className="card facts" aria-label="Model details">
-        <div><span>Model</span><strong>{qwen3TtsManifest.name}</strong></div>
-        <div><span>Required download</span><strong>{formatBytes(qwen3TtsManifest.memory.downloadBytes)}</strong></div>
+        <div><span>Model</span><strong>{pipeline.manifest.name}</strong></div>
+        <div><span>Required download</span><strong>{formatBytes(pipeline.manifest.memory.downloadBytes)}</strong></div>
         <div><span>Backend</span><strong>{backend}</strong></div>
         <div><span>Status</span><strong data-status={status}>{status}</strong></div>
       </section>

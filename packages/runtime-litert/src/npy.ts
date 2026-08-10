@@ -3,8 +3,8 @@ export function parseNpy(buffer: ArrayBuffer): Float32Array {
   const magic = [0x93, 0x4e, 0x55, 0x4d, 0x50, 0x59]
   for (let i = 0; i < 6; i++) if (view.getUint8(i) !== magic[i]) throw new Error('Invalid .npy magic')
   const version = view.getUint8(6)
-  const headerLen = version === 1 ? view.getUint32(8, true) : Number(view.getBigUint64(8, true))
-  const headerOffset = version === 1 ? 12 : 16
+  const headerLen = version === 1 ? view.getUint16(8, true) : view.getUint32(8, true)
+  const headerOffset = version === 1 ? 10 : 12
   const header = new TextDecoder().decode(new Uint8Array(buffer, headerOffset, headerLen))
   const descr = header.match(/'descr':\s*'<([fiu])(\d+)'/)
   const shape = header.match(/'shape':\s*\(([^)]+)\)/)

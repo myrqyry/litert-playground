@@ -27,6 +27,15 @@ describe('createLiteRtRuntime', () => {
     expect(setWebGpuDevice).toHaveBeenCalledWith(device)
   })
 
+  it('loads the default WASM runtime from the package root', async () => {
+    await createLiteRtRuntime({ assets: { resolve: vi.fn() } })
+
+    expect(loadLiteRt).toHaveBeenCalledWith(
+      'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.3/wasm/',
+      { jspi: true },
+    )
+  })
+
   it('falls back to WASM when WebGPU has no usable adapter', async () => {
     vi.stubGlobal('navigator', { gpu: { requestAdapter: vi.fn().mockResolvedValue(null) } })
     const context = await createLiteRtRuntime({ assets: { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(1)) } })

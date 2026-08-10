@@ -6,9 +6,9 @@ export function parseNpy(buffer: ArrayBuffer): Float32Array {
   }
   const version = view.getUint8(6)
   const headerLen = version === 1
-    ? view.getUint32(8, true)
-    : Number(view.getBigUint64(8, true))
-  const hdrOff = version === 1 ? 12 : 16
+    ? view.getUint16(8, true)
+    : view.getUint32(8, true)
+  const hdrOff = version === 1 ? 10 : 12
   const headerStr = new TextDecoder().decode(
     new Uint8Array(buffer, hdrOff, headerLen)
   )
@@ -52,6 +52,40 @@ export function parseNpy(buffer: ArrayBuffer): Float32Array {
   throw new Error(`Unsupported dtype: ${dtype}${bytesPer}`)
 }
 
+function readZip64Sizes(
+  buffer: ArrayBuffer,
+  offset: number,
+  length: number,
+  compressedSize: number,
+  uncompressedSize: number,
+): { compressedSize: number; uncompressedSize: number } {
+  if (compressedSize !== 0xffffffff && uncompressedSize !== 0xffffffff) {
+    return { compressedSize, uncompressedSize }
+  }
+  const view = new DataView(buffer)
+  const end = offset + length
+  let cursor = offset
+  while (cursor + 4 <= end) {
+    const id = view.getUint16(cursor, true)
+    const size = view.getUint16(cursor + 2, true)
+    cursor += 4
+    if (id === 0x0001) {
+      let uncompressed = uncompressedSize
+      let compressed = compressedSize
+      if (uncompressedSize === 0xffffffff) {
+        uncompressed = Number(view.getBigUint64(cursor, true))
+        cursor += 8
+      }
+      if (compressedSize === 0xffffffff) {
+        compressed = Number(view.getBigUint64(cursor, true))
+      }
+      return { compressedSize: compressed, uncompressedSize: uncompressed }
+    }
+    cursor += size
+  }
+  throw new Error('ZIP64 sizes are missing')
+}
+
 export async function parseNpz(buffer: ArrayBuffer): Promise<Record<string, Float32Array>> {
   const u8 = new Uint8Array(buffer)
   const result: Record<string, Float32Array> = {}
@@ -67,29 +101,31 @@ export async function parseNpz(buffer: ArrayBuffer): Promise<Record<string, Floa
     }
     const view = new DataView(buffer, offset)
     const compMethod = view.getUint16(8, true)
-    const compSize = view.getUint32(18, true)
-    const uncompSize = view.getUint32(22, true)
+    const compressedSize = view.getUint32(18, true)
+    const uncompressedSize = view.getUint32(22, true)
     const nameLen = view.getUint16(26, true)
     const extraLen = view.getUint16(28, true)
     const name = new TextDecoder().decode(
       new Uint8Array(buffer, offset + 30, nameLen)
     )
-    const dataOff = offset + 30 + nameLen + extraLen
+    const extraOff = offset + 30 + nameLen
+    const sizes = readZip64Sizes(buffer, extraOff, extraLen, compressedSize, uncompressedSize)
+    const dataOff = extraOff + extraLen
 
     if (name.endsWith('.npy')) {
       const key = name.replace('.npy', '')
       if (compMethod === 0) {
-        result[key] = parseNpy(buffer.slice(dataOff, dataOff + compSize))
+        result[key] = parseNpy(buffer.slice(dataOff, dataOff + sizes.compressedSize))
       } else if (compMethod === 8) {
         if (typeof window !== 'undefined') {
           throw new Error('Decompressed .npz data is not supported in the browser — use uncompressed .npy files')
         }
         const { inflateSync } = await import(/* @vite-ignore */ 'zlib')
-        const inflated = inflateSync(new Uint8Array(buffer, dataOff, compSize))
+        const inflated = inflateSync(new Uint8Array(buffer, dataOff, sizes.compressedSize))
         result[key] = parseNpy(inflated.buffer as ArrayBuffer)
       }
     }
-    offset = dataOff + compSize
+    offset = dataOff + sizes.compressedSize
   }
   return result
 }

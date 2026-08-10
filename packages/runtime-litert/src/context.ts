@@ -18,7 +18,7 @@ export interface LiteRtRuntimeOptions {
 
 function resolveBase(assetBase: string | undefined): string {
   const pageBase = (globalThis as { location?: { href: string } }).location?.href ?? 'http://localhost/'
-  return new URL(assetBase ?? 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.3/dist/', pageBase).href
+  return new URL(assetBase ?? 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.3/', pageBase).href
 }
 
 export async function createLiteRtRuntime(options: LiteRtRuntimeOptions): Promise<RuntimeContext> {
