@@ -6,12 +6,13 @@
   "main": "index.js",
   "scripts": {
     "dev": "pnpm --filter playground dev",
-    "build": "pnpm --filter playground build",
+    "build": "pnpm -r --if-present build",
     "preview": "pnpm --filter playground preview",
-    "test": "pnpm --filter playground test",
+    "test": "pnpm -r --if-present test",
     "test:boundaries": "vitest run tests/package-boundaries.test.ts",
     "test:watch": "pnpm --filter playground test:watch",
-    "typecheck": "pnpm --filter playground typecheck"
+    "typecheck": "pnpm -r --if-present typecheck",
+    "verify": "pnpm typecheck && pnpm test && pnpm test:boundaries && pnpm build"
   },
   "keywords": [],
   "author": "",
