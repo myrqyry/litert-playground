@@ -1,3 +1,4 @@
+import { createRoot } from 'react-dom/client'
 import { useEffect, useState } from 'react'
 import { createCachingAssetResolver, createHttpAssetResolver } from '../../src/assets/http-resolver'
 import { createRuntimeContext } from '../../src/runtime/context'
@@ -106,3 +107,5 @@ export function App() {
     </main>
   )
 }
+
+createRoot(document.getElementById('root')!).render(<App />)

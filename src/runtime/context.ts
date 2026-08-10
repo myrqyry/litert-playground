@@ -9,7 +9,8 @@ export async function createRuntimeContext(
   assets: import('../core/types').AssetResolver,
   signal?: AbortSignal,
 ): Promise<RuntimeContext> {
-  const runtimeUrl = new URL('wasm/', assetBase).href
+  const pageBase = (globalThis as { location?: { href: string } }).location?.href ?? 'http://localhost/'
+  const runtimeUrl = new URL('wasm/', new URL(assetBase, pageBase)).href
   try {
     await loadLiteRt(runtimeUrl, { jspi: true })
   } catch (e) {
