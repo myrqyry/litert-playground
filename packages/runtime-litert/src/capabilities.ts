@@ -35,9 +35,7 @@ export function selectBackend(
   const candidates = preference === 'auto' ? ['webgpu', 'wasm', 'webnn'] as Backend[] : [preference]
   for (const backend of candidates) {
     if (supported[backend] === false) continue
-    if (supported[backend] || preference === 'auto') {
-      if (capabilities[backend].available) return backend
-    }
+    if (capabilities[backend].available) return backend
   }
   throw new Error(`No usable backend for preference ${preference}`)
 }

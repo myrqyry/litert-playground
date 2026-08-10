@@ -5,6 +5,7 @@ import {
   type PipelineProgress,
   type PipelineStatus,
   type RuntimeContext,
+  createInferenceReceipt,
 } from '@litert-playground/inference-core';
 import { checkAudioValid } from '@litert-playground/inference-core';
 import { kokoroManifest } from "./manifest";
@@ -100,13 +101,16 @@ export class KokoroPipeline
         sampleRate,
         channels: 1,
         durationSeconds: duration,
-        receipt: this.createReceipt(
-          inferenceStart,
-          input.text,
-          samples,
-          sampleRate,
-          warnings
-        ),
+          receipt: createInferenceReceipt({
+            manifest: this.manifest,
+            backend: this.context?.backend ?? 'wasm',
+            loadMs: this.loadMs,
+            compileMs: 0,
+            inferenceStart,
+            inputSummary: `${input.text.length} characters`,
+            outputSummary: `${samples.length} samples at ${sampleRate}Hz, 1 channel`,
+            warnings,
+          }),
       };
     } catch (e) {
       this.status = "ready";
@@ -120,27 +124,6 @@ export class KokoroPipeline
     this.tts = null;
     this.context = null;
     this.status = "disposed";
-  }
-
-  private createReceipt(
-    inferenceStart: number,
-    input: string,
-    samples: Float32Array,
-    sampleRate: number,
-    warnings: string[]
-  ): InferenceReceipt {
-    return {
-      modelId: this.manifest.modelId,
-      pipelineVersion: this.manifest.version,
-      backend: this.context?.backend ?? "wasm",
-      timestamp: new Date().toISOString(),
-      loadMs: this.loadMs,
-      compileMs: 0,
-      inferenceMs: performance.now() - inferenceStart,
-      inputSummary: `${input.length} characters`,
-      outputSummary: `${samples.length} samples at ${sampleRate}Hz, 1 channel`,
-      warnings,
-    };
   }
 
   private report(progress: PipelineProgress): void {

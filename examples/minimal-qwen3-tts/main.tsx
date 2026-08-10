@@ -1,10 +1,8 @@
 import { createRoot } from 'react-dom/client'
 import { useEffect, useState } from 'react'
-import { createCachingAssetResolver, createHttpAssetResolver } from '../../src/assets/http-resolver'
-import { createRuntimeContext } from '../../src/runtime/context'
-import { qwen3TtsManifest } from '../../src/adapters/qwen3-tts/manifest'
-import { Qwen3TtsPipeline } from '../../src/adapters/qwen3-tts/pipeline'
-import type { AudioInferenceResult, PipelineProgress } from '../../src/core/types'
+import { createCachingAssetResolver, createHttpAssetResolver, type AudioInferenceResult, type PipelineProgress } from '@litert-playground/inference-core'
+import { createLiteRtRuntime } from '@litert-playground/runtime-litert'
+import { qwen3TtsManifest, Qwen3TtsPipeline } from '@litert-playground/qwen3-tts'
 import './app.css'
 
 const modelBase = '/models/qwen3-tts/'
@@ -28,7 +26,7 @@ export function App() {
     const load = async () => {
       try {
         setStatus('loading')
-        const context = await createRuntimeContext(modelBase, assets)
+        const context = await createLiteRtRuntime({ assetBase: modelBase, assets })
         if (!active) return
         setBackend(context.backend)
         pipeline.onProgress = next => active && setProgress(next)
@@ -58,7 +56,7 @@ export function App() {
       setStatus(pipeline.status)
       const audioContext = new AudioContext()
       const buffer = audioContext.createBuffer(audio.channels, audio.samples.length, audio.sampleRate)
-      buffer.copyToChannel(audio.samples, 0)
+       buffer.copyToChannel(audio.samples as Float32Array<ArrayBuffer>, 0)
       const source = audioContext.createBufferSource()
       source.buffer = buffer
       source.connect(audioContext.destination)

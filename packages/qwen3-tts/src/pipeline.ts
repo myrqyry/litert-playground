@@ -16,6 +16,7 @@ import {
   type InferenceReceipt,
   InferenceError,
   checkAudioValid,
+  createInferenceReceipt,
 } from '@litert-playground/inference-core'
 import { discoverCodecShapes, discoverMtpShapes, discoverTalkerShapes } from './shape-discovery'
 import { parseFp16Npy, type Fp16Table } from './fp16-table'
@@ -230,7 +231,16 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
         this.status = 'ready'
         return {
           kind: 'audio', samples, sampleRate: 24000, channels: 1, durationSeconds: 0,
-          receipt: this.createReceipt(inferenceStart, input.text, samples, 24000, 1, []),
+          receipt: createInferenceReceipt({
+            manifest: this.manifest,
+            backend: this.context?.backend ?? 'wasm',
+            loadMs: this.loadMs,
+            compileMs: this.compileMs,
+            inferenceStart,
+            inputSummary: `${input.text.length} characters`,
+            outputSummary: '0 samples at 24000Hz, 1 channel',
+            warnings: [],
+          }),
         }
       }
 
@@ -249,7 +259,16 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
       this.status = 'ready'
       return {
         kind: 'audio', samples: audio, sampleRate: 24000, channels: 1, durationSeconds: duration,
-        receipt: this.createReceipt(inferenceStart, input.text, audio, 24000, 1, warnings),
+      receipt: createInferenceReceipt({
+        manifest: this.manifest,
+        backend: this.context?.backend ?? 'wasm',
+        loadMs: this.loadMs,
+        compileMs: this.compileMs,
+        inferenceStart,
+        inputSummary: `${input.text.length} characters`,
+        outputSummary: `${audio.length} samples at 24000Hz, 1 channel`,
+        warnings,
+      }),
       }
     } catch (e) {
       this.status = 'ready'
@@ -264,28 +283,6 @@ export class Qwen3TtsPipeline implements Pipeline<QwenTtsInput, AudioInferenceRe
     this.tokenizer = null
     this.context = null
     this.status = 'disposed'
-  }
-
-  private createReceipt(
-    inferenceStart: number,
-    input: string,
-    samples: Float32Array,
-    sampleRate: number,
-    channels: number,
-    warnings: string[],
-  ): InferenceReceipt {
-    return {
-      modelId: this.manifest.modelId,
-      pipelineVersion: this.manifest.version,
-      backend: this.context?.backend || 'wasm',
-      timestamp: new Date().toISOString(),
-      loadMs: this.loadMs,
-      compileMs: this.compileMs,
-      inferenceMs: performance.now() - inferenceStart,
-      inputSummary: `${input.length} characters`,
-      outputSummary: `${samples.length} samples at ${sampleRate}Hz, ${channels} channel${channels === 1 ? '' : 's'}`,
-      warnings,
-    }
   }
 
   // ---- internals ----

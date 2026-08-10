@@ -33,6 +33,12 @@ describe('createLiteRtRuntime', () => {
     expect(context.backend).toBe('wasm')
   })
 
+  it('honors an explicit WASM preference', async () => {
+    vi.stubGlobal('navigator', { gpu: { requestAdapter: vi.fn().mockResolvedValue({ requestDevice: vi.fn() }) } })
+    const context = await createLiteRtRuntime({ backend: 'wasm', assets: { resolve: vi.fn() } })
+    expect(context.backend).toBe('wasm')
+  })
+
   it('does not fall back for an explicit unavailable backend', async () => {
     await expect(createLiteRtRuntime({ backend: 'webgpu', assets: { resolve: vi.fn() } }))
       .rejects.toMatchObject({ code: 'BACKEND_UNAVAILABLE' })

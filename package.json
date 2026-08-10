@@ -9,6 +9,7 @@
     "build": "pnpm --filter playground build",
     "preview": "pnpm --filter playground preview",
     "test": "pnpm --filter playground test",
+    "test:boundaries": "vitest run tests/package-boundaries.test.ts",
     "test:watch": "pnpm --filter playground test:watch",
     "typecheck": "pnpm --filter playground typecheck"
   },

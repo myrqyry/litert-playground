@@ -2,10 +2,9 @@
 // Run: npx vitest run src/core/validation.test.ts src/adapters/qwen3-tts/pipeline.test.ts
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { Qwen3TtsPipeline, type QwenTtsInput, type QwenTtsConfig } from '../../src/adapters/qwen3-tts/pipeline'
-import { createCachingAssetResolver, createHttpAssetResolver } from '../../src/assets/http-resolver'
-import { createRuntimeContext } from '../../src/runtime/context'
-import { qwen3TtsManifest } from '../../src/adapters/qwen3-tts/manifest'
+import { createCachingAssetResolver, createHttpAssetResolver } from '@litert-playground/inference-core'
+import { createLiteRtRuntime } from '@litert-playground/runtime-litert'
+import { Qwen3TtsPipeline, qwen3TtsManifest, type QwenTtsInput, type QwenTtsConfig } from '@litert-playground/qwen3-tts'
 
 describe('minimal Qwen3-TTS extraction', () => {
   it('creates pipeline with manifest', () => {
@@ -49,14 +48,14 @@ describe('minimal Qwen3-TTS extraction', () => {
     const source = readFileSync(new URL('./main.tsx', import.meta.url), 'utf8')
     expect(source).toContain('createHttpAssetResolver')
     expect(source).toContain('createCachingAssetResolver')
-    expect(source).toContain('createRuntimeContext')
+    expect(source).toContain('createLiteRtRuntime')
     expect(source).toContain('qwen3TtsManifest')
     expect(source).toContain('Qwen3TtsPipeline')
     expect(source).not.toMatch(/src\/App|registry|components\//)
     expect(readFileSync(new URL('./index.html', import.meta.url), 'utf8')).toContain('main.tsx')
     void createHttpAssetResolver
     void createCachingAssetResolver
-    void createRuntimeContext
+    void createLiteRtRuntime
     void qwen3TtsManifest
   })
 })

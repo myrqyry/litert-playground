@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kokoro LiteRT Example</title>
+  </head>
+  <body>
+    <main class="shell">
+      <p class="eyebrow">Standalone browser consumer</p>
+      <h1>Kokoro TTS</h1>
+      <p class="lede">Load Kokoro, synthesize a phrase, and inspect the normalized audio receipt.</p>
+      <label for="phrase">Phrase</label>
+      <textarea id="phrase" rows="4">Hello from the standalone Kokoro example.</textarea>
+      <button id="synthesize" type="button">Synthesize and play</button>
+      <p id="status" role="status">Loading...</p>
+      <section id="receipt" hidden>
+        <h2>Inference receipt</h2>
+        <dl id="receipt-values"></dl>
+      </section>
+      <p id="error" class="error" role="alert" hidden></p>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

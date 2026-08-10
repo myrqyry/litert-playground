@@ -1,0 +1,22 @@
+{
+  "name": "@litert-playground/example-kokoro",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config ../vite.config.ts",
+    "build": "vite build --config ../vite.config.ts",
+    "test": "vitest run extraction.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@litert-playground/inference-core": "workspace:*",
+    "@litert-playground/kokoro": "workspace:*",
+    "@litert-playground/runtime-litert": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10"
+  }
+}

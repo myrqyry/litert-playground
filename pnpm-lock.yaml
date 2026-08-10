@@ -303,6 +303,65 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(jiti@2.7.0))
 
+  examples/minimal-kokoro:
+    dependencies:
+      '@litert-playground/inference-core':
+        specifier: workspace:*
+        version: link:../../packages/inference-core
+      '@litert-playground/kokoro':
+        specifier: workspace:*
+        version: link:../../packages/kokoro
+      '@litert-playground/runtime-litert':
+        specifier: workspace:*
+        version: link:../../packages/runtime-litert
+    devDependencies:
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vite:
+        specifier: ^8.1.5
+        version: 8.1.5(@types/node@26.1.1)(jiti@2.7.0)
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(jiti@2.7.0))
+
+  examples/minimal-qwen3-tts:
+    dependencies:
+      '@litert-playground/inference-core':
+        specifier: workspace:*
+        version: link:../../packages/inference-core
+      '@litert-playground/qwen3-tts':
+        specifier: workspace:*
+        version: link:../../packages/qwen3-tts
+      '@litert-playground/runtime-litert':
+        specifier: workspace:*
+        version: link:../../packages/runtime-litert
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      '@vitejs/plugin-react':
+        specifier: ^6.0.4
+        version: 6.0.4(vite@8.1.5(@types/node@26.1.1)(jiti@2.7.0))
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vite:
+        specifier: ^8.1.5
+        version: 8.1.5(@types/node@26.1.1)(jiti@2.7.0)
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(jiti@2.7.0))
+
   packages/inference-core:
     devDependencies:
       typescript:
