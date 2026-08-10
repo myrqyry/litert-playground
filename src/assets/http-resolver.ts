@@ -4,10 +4,10 @@ export type { ModelAsset, AssetResolver }
 
 export function createHttpAssetResolver(baseUrl: string): AssetResolver {
   return {
-    async resolve(asset: ModelAsset): Promise<ArrayBuffer> {
+    async resolve(asset: ModelAsset, signal?: AbortSignal): Promise<ArrayBuffer> {
       const url = new URL(asset.path, baseUrl).href
       try {
-        const resp = await fetch(url)
+        const resp = await fetch(url, { signal })
         if (!resp.ok) {
           throw new InferenceError('ASSET_FETCH_FAILED', `HTTP ${resp.status} fetching ${asset.id}`, { asset: asset.id })
         }
@@ -21,9 +21,9 @@ export function createHttpAssetResolver(baseUrl: string): AssetResolver {
       }
     },
 
-async stream(asset: ModelAsset): Promise<ReadableStream<Uint8Array>> {
+    async stream(asset: ModelAsset, signal?: AbortSignal): Promise<ReadableStream<Uint8Array>> {
       const url = new URL(asset.path, baseUrl).href
-      const resp = await fetch(url)
+      const resp = await fetch(url, { signal })
       if (!resp.ok || !resp.body) {
         throw new InferenceError('ASSET_FETCH_FAILED', `HTTP ${resp.status} streaming ${asset.id}`, { asset: asset.id })
       }
@@ -37,14 +37,17 @@ export function createCachingAssetResolver(inner: AssetResolver): AssetResolver 
   const cache = new Map<string, Promise<ArrayBuffer>>()
 
   return {
-    async resolve(asset: ModelAsset): Promise<ArrayBuffer> {
+    async resolve(asset: ModelAsset, signal?: AbortSignal): Promise<ArrayBuffer> {
       const key = asset.path
       if (cache.has(key)) return cache.get(key)!
-      const p = inner.resolve({ ...asset, path: asset.path })
+      const p = inner.resolve({ ...asset, path: asset.path }, signal)
       cache.set(key, p)
+      void p.catch(() => {
+        if (cache.get(key) === p) cache.delete(key)
+      })
       return p
     },
 
-    stream: inner.stream?.bind(inner),
+    stream: inner.stream ? (asset, signal) => inner.stream!(asset, signal) : undefined,
   }
 }

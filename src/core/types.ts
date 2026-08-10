@@ -26,8 +26,8 @@ export interface ModelAsset {
 }
 
 export interface AssetResolver {
-  resolve(asset: ModelAsset): Promise<ArrayBuffer>
-  stream?(asset: ModelAsset): Promise<ReadableStream<Uint8Array>>
+  resolve(asset: ModelAsset, signal?: AbortSignal): Promise<ArrayBuffer>
+  stream?(asset: ModelAsset, signal?: AbortSignal): Promise<ReadableStream<Uint8Array>>
 }
 
 export interface RuntimeContext {
@@ -76,6 +76,7 @@ export interface AudioInferenceResult {
   sampleRate: number
   channels: number
   durationSeconds: number
+  receipt: InferenceReceipt
 }
 
 export interface TextInferenceResult {
