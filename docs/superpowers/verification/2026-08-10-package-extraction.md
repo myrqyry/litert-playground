@@ -148,3 +148,39 @@ inference, output validation, and audible playback are untested. The blocker
 needs a memory-lighter generator residency plan (for example a smaller text
 embedding table path, or a runtime that does not keep both generator graphs
 and the full kv cache resident simultaneously).
+
+### Prompt compaction and three-phase worker isolation
+
+A follow-up experiment (run 2026-08-10) tested whether eliminating the prompt
+assets entirely unblocks the generator prefill, by splitting the load into two
+disposable classic workers:
+
+1. **Prompt worker** loaded tokenizer, the 622 MB FP16 text embedding table,
+   the text projection weights, and the speaker embedding, built the prompt
+   conditioning for `Testing one two three.` (16 tokens), and transferred it to
+   the host. The compact conditioning is only **212,992 bytes (~213 KB)** -
+   prefill 40,960 B + trailing + ttsPad - which validates that prompt
+   preparation has an excellent serialization boundary. The prompt worker was
+   then **fully terminated**.
+2. **Generator worker** started a fresh LiteRT context, compiled
+   `talker_int4.tflite` (3.55 s) and `mtp_folded_int8.tflite` (1.88 s,
+   `qwen3TtsVariants.browserMemory`), created the kv cache, and ran the first
+   `prefill_32` with the transferred conditioning.
+
+Result: **prefill still fails** with `tensor_buffer.h:101` at
+`Talker.prefill` -> `LiteRtTensorBuffer.createManaged`, identical to every
+earlier variant. Both earlier confounds are eliminated here: the 622 MB prompt
+assets cannot be resident (their worker is dead), and the generator worker owns
+its own downloaded model byte arrays. The resident set is reduced to compiled
+Talker INT4 + compiled MTP INT8 + kv cache + small embedding tables + ~213 KB
+conditioning + run tensors, yet a single prefill cannot allocate a managed
+tensor buffer. This is the base residency of the two compiled generator graphs
+plus kv plus runtime tensors exceeding the browser WASM/JS budget; it is not
+fixable by further lifetime management.
+
+Lifetime-management variants attempted, in order: three-graph codec residency
+(solved only by moving codec to a separate worker), FP32 MTP headless, FP32 MTP
+headed (Xvfb), INT8 MTP, same-context prompt-table teardown, and full three
+phase worker isolation. All fail at the same prefill allocation. The remaining
+options are a smaller/quantized generator export path or a different model, not
+further residency restructuring.
