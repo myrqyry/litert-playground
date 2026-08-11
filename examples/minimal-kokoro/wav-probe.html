@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Kokoro WAV probe</title>
+  </head>
+  <body>
+    <pre id="out">running...</pre>
+    <script type="module">
+      (async () => {
+        try {
+          const { KokoroPipeline } = await import(
+            "/packages/kokoro/src/pipeline.ts"
+          );
+          const { createHttpAssetResolver } = await import(
+            "/packages/inference-core/src/index.ts"
+          );
+          const context = {
+            backend: "wasm",
+            assets: createHttpAssetResolver("/models/kokoro/"),
+            liteRt: {
+              loadModel: () => {
+                throw new Error("Kokoro does not use LiteRT");
+              },
+              loadNpy: () => {
+                throw new Error("Kokoro does not use LiteRT");
+              },
+              fetchBuffer: () => {
+                throw new Error("Kokoro does not use LiteRT");
+              },
+            },
+          };
+          const pipeline = new KokoroPipeline();
+          await pipeline.load(context);
+          const result = await pipeline.run({ text: "Testing one two three." });
+          window.__kokoroResult = {
+            samples: Array.from(result.samples),
+            sampleRate: result.sampleRate,
+            channels: result.channels,
+            durationSeconds: result.durationSeconds,
+            loadMs: result.receipt.loadMs,
+            inferenceMs: result.receipt.inferenceMs,
+            warnings: result.receipt.warnings,
+          };
+          document.getElementById("out").textContent = "done";
+        } catch (cause) {
+          document.getElementById("out").textContent = "FATAL: " + String(cause);
+          throw cause;
+        }
+      })();
+    </script>
+  </body>
+</html>
