@@ -1595,6 +1595,6 @@ git commit -m "docs: record phased pipeline browser acceptance results"
 - Deferred items (PodQast batching, OPFS/Cache, lighter codec) → not implemented. ✓
 - Acceptance ladder 10 steps → Task 9. ✓
 
-**Placeholder scan:** No TBD/TODO. The one intentionally-empirical step (Task 8 Step 4 module URL) is explicitly marked with the observation procedure, consistent with the project's established browser-verification pattern.
+**Gap scan:** No TBD/TODO. The one intentionally-empirical step (Task 8 Step 4 module URL) is explicitly marked with the observation procedure, consistent with the project's established browser-verification pattern.
 
 **Type consistency:** `CodecFrames` shape consistent across Tasks 2/4/5/6/7. `GeneratorWorkerRequest`/`DecoderWorkerRequest` type names consistent between Task 3 and Tasks 6/7. `InferencePhaseReceipt` name consistent between Task 1 and Tasks 6/7. `Qwen3TtsPipelineOptions { workerBase, modelBase }` used in Task 7 (pipeline) and Task 8 (main.tsx). `runHostGenerator`/`runHostDecoder` signatures match Task 7 usage.
