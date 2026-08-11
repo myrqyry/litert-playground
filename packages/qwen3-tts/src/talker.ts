@@ -45,24 +45,25 @@ export class Talker {
 
   get numKvSlots(): number { return this.config.numKvSlots }
 
-  createEmptyKv(): Record<string, Tensor> {
-    const kv: Record<string, Tensor> = {}
+  /** KV cache lives in the JS heap (Float32Array[]) so WASM managed
+   * buffers are never held across calls — matches the PodQast reference
+   * and avoids renderer WASM memory exhaustion during decode. */
+  createEmptyKv(): Float32Array[] {
+    const kv: Float32Array[] = []
     for (let i = 0; i < this.config.kvNames.length; i++) {
-      kv[this.config.kvNames[i]] = new Tensor(new Float32Array(this.config.kvShapes[i].reduce((a, b) => a * b, 1)), this.config.kvShapes[i])
+      kv.push(new Float32Array(this.config.kvShapes[i].reduce((a, b) => a * b, 1)))
     }
     return kv
   }
 
   async prefill(
     embeddings: Float32Array,
-    kvCache: Record<string, Tensor>,
+    kvCache: Float32Array[],
     seqLen?: number,
-  ): Promise<{ kvCache: Record<string, Tensor> }> {
+  ): Promise<{ kvCache: Float32Array[] }> {
     const inputs: Record<string, Promise<Tensor>> = {}
     for (let i = 0; i < this.config.kvNames.length; i++) {
-      const name = this.config.kvNames[i]
-      const tensor = kvCache[name]
-      inputs[name] = toInputTensor(tensor.toTypedArray() as Float32Array, this.config.kvShapes[i], this.config.accelerator!)
+      inputs[this.config.kvNames[i]] = toInputTensor(kvCache[i], this.config.kvShapes[i], this.config.accelerator!)
     }
     const sl = seqLen ?? (embeddings.length / this.config.hiddenDim) | 0
     const negInf = -1e9
@@ -87,11 +88,9 @@ export class Talker {
     for (const [key, promise] of Object.entries(inputs)) resolved[key] = await promise
     const result = await this.model.run('prefill_32', resolved)
 
-    const outKv: Record<string, Tensor> = {}
-    for (const [key, tensor] of Object.entries(result)) {
-      if (key.startsWith('kv_cache') || key.startsWith('StateArray')) {
-        outKv[key] = tensor as Tensor
-      }
+    const outKv: Float32Array[] = []
+    for (let i = 0; i < this.config.kvNames.length; i++) {
+      outKv.push(readFloat32(result[this.config.kvNames[i]] as Tensor))
     }
 
     return { kvCache: outKv }
@@ -99,14 +98,12 @@ export class Talker {
 
   async decode(
     embeddings: Float32Array,
-    kvCache: Record<string, Tensor>,
+    kvCache: Float32Array[],
     pos?: number,
-  ): Promise<{ logits: Float32Array; hidden: Float32Array; kvCache: Record<string, Tensor>; }> {
+  ): Promise<{ logits: Float32Array; hidden: Float32Array; kvCache: Float32Array[] }> {
     const inputs: Record<string, Promise<Tensor>> = {}
     for (let i = 0; i < this.config.kvNames.length; i++) {
-      const name = this.config.kvNames[i]
-      const tensor = kvCache[name]
-      inputs[name] = toInputTensor(tensor.toTypedArray() as Float32Array, this.config.kvShapes[i], this.config.accelerator!)
+      inputs[this.config.kvNames[i]] = toInputTensor(kvCache[i], this.config.kvShapes[i], this.config.accelerator!)
     }
     const p = pos ?? 0
     const negInf = -1e9
@@ -124,11 +121,9 @@ export class Talker {
     const cb0Logits = logits.slice(0, this.config.codecVocab)
     const hidden = logits.slice(this.config.codecVocab)
 
-    const outKv: Record<string, Tensor> = {}
-    for (const [key, tensor] of Object.entries(result)) {
-      if (this.config.kvNames.includes(key) || key.startsWith('kv_cache') || key.startsWith('StateArray')) {
-        outKv[key] = tensor as Tensor
-      }
+    const outKv: Float32Array[] = []
+    for (let i = 0; i < this.config.kvNames.length; i++) {
+      outKv.push(readFloat32(result[this.config.kvNames[i]] as Tensor))
     }
 
     return { logits: cb0Logits, hidden, kvCache: outKv }
