@@ -161,6 +161,15 @@ export class InferenceError extends Error {
   }
 }
 
+export interface InferencePhaseReceipt {
+  name: string
+  backend: Backend
+  loadMs?: number
+  compileMs?: number
+  inferenceMs?: number
+  warnings?: string[]
+}
+
 export interface InferenceReceipt {
   modelId: string
   pipelineVersion: string
@@ -173,6 +182,7 @@ export interface InferenceReceipt {
   outputSummary: string
   warnings: string[]
   environment?: string
+  phases?: InferencePhaseReceipt[]
 }
 
 export interface RuntimeCapabilities {

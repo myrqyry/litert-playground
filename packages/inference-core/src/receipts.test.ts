@@ -14,4 +14,27 @@ describe('inference receipts', () => {
     expect(receipt.environment).toBe('browser: test-browser')
     now.mockRestore()
   })
+
+  it('passes phase receipts through when provided', () => {
+    const phases = [
+      { name: 'generator', backend: 'wasm' as const, loadMs: 10, compileMs: 20, inferenceMs: 30, warnings: ['w'] },
+      { name: 'decoder', backend: 'wasm' as const, loadMs: 5, compileMs: 6 },
+    ]
+    const receipt = createInferenceReceipt({
+      manifest: { modelId: 'model', version: '1.0.0' },
+      backend: 'wasm', loadMs: 15, compileMs: 26, inferenceStart: 0,
+      inputSummary: 'input', outputSummary: 'output', warnings: [],
+      phases,
+    })
+    expect(receipt.phases).toEqual(phases)
+  })
+
+  it('omits phases when not provided', () => {
+    const receipt = createInferenceReceipt({
+      manifest: { modelId: 'model', version: '1.0.0' },
+      backend: 'wasm', loadMs: 2, compileMs: 3, inferenceStart: 10,
+      inputSummary: 'input', outputSummary: 'output', warnings: [],
+    })
+    expect(receipt.phases).toBeUndefined()
+  })
 })
