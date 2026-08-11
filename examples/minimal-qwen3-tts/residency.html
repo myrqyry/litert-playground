@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8" /><title>residency diag</title></head>
+<body>
+<pre id="out">running...</pre>
+<script type="module">
+  const out = document.getElementById('out')
+
+  function runPhase(graphs, label) {
+    return new Promise((resolve, reject) => {
+      console.log(`residency: ${label} spawning worker`)
+      const worker = new Worker('/litert-wasm/residency-worker.js')
+      worker.onmessage = (event) => {
+        const msg = event.data
+        if (msg.type === 'result') {
+          console.log(`residency: ${label} result ok=${msg.result.ok}`)
+          worker.terminate()
+          console.log(`residency: ${label} worker terminated`)
+          resolve({ label, ...msg.result })
+        }
+      }
+      worker.onerror = (event) => {
+        console.log(`residency: ${label} worker error: ${event.message}`)
+        worker.terminate()
+        reject(new Error(`${label} worker error: ${event.message}`))
+      }
+      worker.postMessage({ graphs })
+    })
+  }
+
+  try {
+    const phaseA = await runPhase(
+      [
+        { name: 'talker', path: 'talker_int4.tflite' },
+        { name: 'mtp', path: 'mtp_fp32.tflite' },
+      ],
+      'A(talker+mtp)',
+    )
+    const phaseB = await runPhase([{ name: 'codec', path: 'codec_decoder_fp32.tflite' }], 'B(codec)')
+    out.textContent = JSON.stringify({ phaseA, phaseB }, null, 2)
+  } catch (e) {
+    out.textContent = 'FATAL: ' + (e instanceof Error ? e.stack : String(e))
+  }
+</script>
+</body>
+</html>

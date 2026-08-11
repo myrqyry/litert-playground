@@ -56,27 +56,37 @@ function jsHeap(): { jsHeapUsedMB: number; jsHeapTotalMB: number } {
   return { jsHeapUsedMB: Math.round(m.usedJSHeapSize / 1048576), jsHeapTotalMB: Math.round(m.totalJSHeapSize / 1048576) }
 }
 
+export interface GraphSpec {
+  name: string
+  path: string
+}
+
+export const ALL_GRAPHS: GraphSpec[] = [
+  { name: 'talker', path: 'talker_int4.tflite' },
+  { name: 'mtp', path: 'mtp_fp32.tflite' },
+  { name: 'codec', path: 'codec_decoder_fp32.tflite' },
+]
+
 export async function runGraphDiag(only?: string): Promise<GraphDiagResult> {
+  const graphs = only === undefined ? ALL_GRAPHS : ALL_GRAPHS.filter((graph) => graph.name === only)
+  return compileGraphs(graphs)
+}
+
+export async function compileGraphs(graphs: GraphSpec[], wasmBase: string = WASM_BASE): Promise<GraphDiagResult> {
   const steps: GraphDiagStep[] = []
   const started = performance.now()
   try {
-    await loadLiteRt(WASM_BASE, { jspi: true })
+    await loadLiteRt(wasmBase, { jspi: true })
   } catch (cause) {
     return {
       ok: false,
       runtimeMs: Math.round(performance.now() - started),
       backend: 'unknown',
-      steps: [{ name: 'runtime', path: WASM_BASE, status: 'fail', error: String(cause) }],
+      steps: [{ name: 'runtime', path: wasmBase, status: 'fail', error: String(cause) }],
       finishedAt: new Date().toISOString(),
     }
   }
   const runtimeMs = Math.round(performance.now() - started)
-
-  const graphs: Array<{ name: string; path: string }> = [
-    { name: 'talker', path: 'talker_int4.tflite' },
-    { name: 'mtp', path: 'mtp_fp32.tflite' },
-    { name: 'codec', path: 'codec_decoder_fp32.tflite' },
-  ].filter((graph) => only === undefined || graph.name === only)
 
   for (const graph of graphs) {
     const step: GraphDiagStep = { name: graph.name, path: graph.path, status: 'fetch' }

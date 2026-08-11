@@ -18,7 +18,7 @@ The repository does not contain the model assets required for browser inference.
 | Boundary | Kokoro | Qwen3-TTS |
 | --- | --- | --- |
 | Assets | untested | partial pass; speaker embedding untested |
-| Compile | untested | Talker pass; MTP pass; codec blocker |
+| Compile | untested | Talker pass; MTP pass; codec pass (staged worker residency) |
 | Inference | untested | untested |
 | Output | untested | untested |
 | Audible audio | untested | untested |
@@ -81,3 +81,24 @@ process crashes at 497/497 MB JS heap, and this is not tunable via
 `--max-old-space-size`. Reaching the next stage (inference) requires either a
 memory-lighter codec path or a way to free compiled-graph memory between
 stages.
+
+### Staged worker residency: blocker resolved
+
+A two-worker experiment proved the memory is reclaimable by process
+isolation. Two disposable classic Web Workers (served at
+`/litert-wasm/residency-worker.js` via a Vite proxy to
+`@litertjs/core@2.5.3`):
+
+- Worker A initialized LiteRT and compiled `talker_int4.tflite` (fetch
+  15,841 ms, compile 3,982 ms) and `mtp_fp32.tflite` (fetch 42,877 ms,
+  compile 492 ms), then was fully terminated.
+- A fresh Worker B initialized LiteRT and compiled only
+  `codec_decoder_fp32.tflite` (fetch 64,347 ms, compile 614 ms): **pass**.
+
+Both workers reported ok=true with no crashes or page errors, and JS heap
+pressure stayed at 0/0 MB (each worker is a separate renderer process, so the
+accumulated three-graph memory never coexists). This proves terminating the
+Talker/MTP worker releases enough WASM residency for codec compilation, and
+gives the pipeline a route forward: compile/run the generator graphs in one
+worker, tear it down, then compile the codec in a second worker. Inference,
+audio validation, and audible playback remain untested.

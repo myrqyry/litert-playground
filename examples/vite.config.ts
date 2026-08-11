@@ -7,6 +7,9 @@ import type { Connect, Plugin } from 'vite'
 const root = path.resolve(__dirname, '..')
 const modelPrefix = '/models/qwen3-tts/'
 const modelRepository = 'litert-community/Qwen3-TTS-12Hz-0.6B-Base'
+const litertWasmPrefix = '/litert-wasm/'
+const litertWasmUpstream = 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.3/wasm/'
+const residencyWorkerFile = path.resolve(__dirname, 'minimal-qwen3-tts/residency-worker.js')
 
 function qwenModelProxy(): Plugin {
   const middleware: Connect.NextHandleFunction = async (req, res, next) => {
@@ -69,9 +72,64 @@ function qwenModelProxy(): Plugin {
   }
 }
 
+function litertWasmProxy(): Plugin {
+  const middleware: Connect.NextHandleFunction = async (req, res, next) => {
+    const requestPath = req.url?.split('?')[0] ?? ''
+    if (!requestPath.startsWith(litertWasmPrefix)) {
+      next()
+      return
+    }
+
+    const rest = decodeURIComponent(requestPath.slice(litertWasmPrefix.length))
+
+    if (rest === 'residency-worker.js') {
+      res.setHeader('content-type', 'application/javascript')
+      res.setHeader('cache-control', 'no-store')
+      res.end(await import('node:fs/promises').then((fs) => fs.readFile(residencyWorkerFile)))
+      return
+    }
+
+    if (!rest || rest.includes('..')) {
+      res.statusCode = 400
+      res.end('Invalid wasm path')
+      return
+    }
+
+    const upstream = new URL(litertWasmUpstream + rest)
+    try {
+      const response = await fetch(upstream, {
+        method: req.method === 'HEAD' ? 'HEAD' : 'GET',
+      })
+      res.statusCode = response.status
+      response.headers.forEach((value, name) => {
+        if (name === 'content-encoding' || name === 'content-length') return
+        res.setHeader(name, value)
+      })
+      if (req.method === 'HEAD' || !response.body) {
+        res.end()
+        return
+      }
+      Readable.fromWeb(response.body).pipe(res)
+    } catch (cause) {
+      res.statusCode = 502
+      res.end(`Wasm proxy failed: ${String(cause)}`)
+    }
+  }
+
+  return {
+    name: 'litert-wasm-proxy',
+    configureServer(server) {
+      server.middlewares.use(middleware)
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(middleware)
+    },
+  }
+}
+
 export default defineConfig({
   root,
-  plugins: [react(), qwenModelProxy()],
+  plugins: [react(), qwenModelProxy(), litertWasmProxy()],
   build: {
     assetsInlineLimit: 0,
     rollupOptions: {
