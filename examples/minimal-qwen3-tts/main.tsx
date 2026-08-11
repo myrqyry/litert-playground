@@ -12,7 +12,7 @@ function formatBytes(bytes: number): string {
 }
 
 export function App() {
-  const [pipeline] = useState(() => new Qwen3TtsPipeline(qwen3TtsVariants.int4))
+  const [pipeline] = useState(() => new Qwen3TtsPipeline(qwen3TtsVariants.int4, { modelBase }))
   const [status, setStatus] = useState(pipeline.status)
   const [progress, setProgress] = useState<PipelineProgress | null>(null)
   const [backend, setBackend] = useState<string>('detecting')

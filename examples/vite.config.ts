@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import fs from 'node:fs'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import type { Connect, Plugin } from 'vite'
@@ -10,6 +11,13 @@ const modelRepository = 'litert-community/Qwen3-TTS-12Hz-0.6B-Base'
 const litertWasmPrefix = '/litert-wasm/'
 const litertWasmUpstream = 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.3/wasm/'
 const residencyWorkerFile = path.resolve(__dirname, 'minimal-qwen3-tts/residency-worker.js')
+const generatorWorkerFile = path.resolve(__dirname, 'minimal-qwen3-tts/generator-worker.js')
+const decoderWorkerFile = path.resolve(__dirname, 'minimal-qwen3-tts/decoder-worker.js')
+const workerShells: Record<string, string> = {
+  'residency-worker.js': residencyWorkerFile,
+  'generator-worker.js': generatorWorkerFile,
+  'decoder-worker.js': decoderWorkerFile,
+}
 
 function qwenModelProxy(): Plugin {
   const middleware: Connect.NextHandleFunction = async (req, res, next) => {
@@ -82,10 +90,11 @@ function litertWasmProxy(): Plugin {
 
     const rest = decodeURIComponent(requestPath.slice(litertWasmPrefix.length))
 
-    if (rest === 'residency-worker.js') {
+    if (workerShells[rest]) {
+      const file = workerShells[rest]
       res.setHeader('content-type', 'application/javascript')
       res.setHeader('cache-control', 'no-store')
-      res.end(await import('node:fs/promises').then((fs) => fs.readFile(residencyWorkerFile)))
+      res.end(fs.readFileSync(file))
       return
     }
 
