@@ -22,4 +22,26 @@ describe('workspace package boundaries', () => {
     expect(kokoro).toContain('@litert-playground/inference-core')
     expect(qwen).toContain('@litert-playground/inference-core')
   })
+
+  it('keeps Kokoro externally consumable through the shared core contract', async () => {
+    const manifest = JSON.parse(await text('packages/kokoro/package.json')) as {
+      dependencies?: Record<string, string>
+      peerDependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+    const source = await text('packages/kokoro/src/pipeline.ts')
+    const entrypoint = await text('packages/kokoro/src/index.ts')
+
+    expect(manifest.dependencies).toMatchObject({ 'kokoro-js': '^1.2.1' })
+    expect(manifest.dependencies?.['@litert-playground/inference-core']).toBeUndefined()
+    expect(manifest.peerDependencies).toMatchObject({ '@litert-playground/inference-core': '0.1.x' })
+    expect(manifest.devDependencies).toMatchObject({ '@litert-playground/inference-core': 'workspace:*' })
+    expect(source).toMatch(
+      /from ['"]@litert-playground\/inference-core['"]/,
+    )
+    expect(entrypoint).toContain('KokoroPipeline')
+    expect(entrypoint).toContain('kokoroManifest')
+    expect(entrypoint).toContain('KokoroInput')
+    expect(entrypoint).toContain('KokoroConfig')
+  })
 })

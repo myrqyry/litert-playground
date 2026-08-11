@@ -10,11 +10,14 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
+  "peerDependencies": {
+    "@litert-playground/inference-core": "0.1.x"
+  },
   "dependencies": {
-    "@litert-playground/inference-core": "workspace:*",
     "kokoro-js": "^1.2.1"
   },
   "devDependencies": {
+    "@litert-playground/inference-core": "workspace:*",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }
