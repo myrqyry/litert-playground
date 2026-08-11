@@ -50,7 +50,7 @@ describe('minimal Qwen3-TTS extraction', () => {
     expect(source).toContain('createHttpAssetResolver')
     expect(source).toContain('createCachingAssetResolver')
     expect(source).toContain('createLiteRtRuntime')
-    expect(source).toContain('qwen3TtsVariants.int4')
+    expect(source).toContain('qwen3TtsVariants.browserMemory')
     expect(source).toContain('Qwen3TtsPipeline')
     expect(source).toContain("new URL('/models/qwen3-tts/', window.location.href).href")
     expect(source).toContain('createLiteRtRuntime({ assets })')
