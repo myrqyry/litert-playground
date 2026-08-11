@@ -7,11 +7,22 @@ const OVERLAP_LEFT = 25
 export interface CodecConfig {
   chunkSize?: number
   overlapLeft?: number
+  accelerator?: 'wasm' | 'webgpu'
+}
+
+async function toInputTensor(data: Float32Array | Int32Array, shape: number[], accelerator: 'wasm' | 'webgpu'): Promise<Tensor> {
+  return new Tensor(data, shape).moveTo(accelerator)
+}
+
+function readFloat32(tensor: Tensor): Float32Array {
+  const arr = tensor.toTypedArray()
+  return arr instanceof Float32Array ? arr : Float32Array.from(arr)
 }
 
 export class CodecDecoder {
   private chunkSize: number
   private overlapLeft: number
+  private accelerator: 'wasm' | 'webgpu'
 
   constructor(
     private model: CompiledModel,
@@ -19,6 +30,7 @@ export class CodecDecoder {
   ) {
     this.chunkSize = config?.chunkSize ?? 64
     this.overlapLeft = config?.overlapLeft ?? OVERLAP_LEFT
+    this.accelerator = config?.accelerator ?? 'wasm'
   }
 
   async decode(frameCodes: number[][]): Promise<Float32Array> {
@@ -40,13 +52,15 @@ export class CodecDecoder {
         }
       }
 
-      const inputs: Record<string, Tensor> = {
-        'args_0': new Tensor(buf, [1, NUM_CODE_GROUPS, chunk]),
+      const inputs: Record<string, Promise<Tensor>> = {
+        'args_0': toInputTensor(buf, [1, NUM_CODE_GROUPS, chunk], this.accelerator),
       }
 
-      const result = await this.model.run(inputs)
+      const resolved: Record<string, Tensor> = {}
+      for (const [key, promise] of Object.entries(inputs)) resolved[key] = await promise
+      const result = await this.model.run(resolved)
       const outKey = Object.keys(result)[0]
-      const wav = new Float32Array(await (result[outKey] as Tensor).data())
+      const wav = readFloat32(result[outKey] as Tensor)
 
       const validFrames = windowLen - c
       if (validFrames > 0) {

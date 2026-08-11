@@ -10,6 +10,8 @@ export interface TalkerConfig {
   cacheLen: number
   kvNames: string[]
   kvShapes: number[][]
+  /** Accelerator to move input tensors to before running (matches reference) */
+  accelerator?: 'wasm' | 'webgpu'
 }
 
 const DEFAULT_CONFIG: TalkerConfig = {
@@ -19,6 +21,16 @@ const DEFAULT_CONFIG: TalkerConfig = {
   cacheLen: 32,
   kvNames: [],
   kvShapes: [],
+  accelerator: 'wasm',
+}
+
+async function toInputTensor(data: Float32Array | Int32Array, shape: number[], accelerator: 'wasm' | 'webgpu'): Promise<Tensor> {
+  return new Tensor(data, shape).moveTo(accelerator)
+}
+
+function readFloat32(tensor: Tensor): Float32Array {
+  const arr = tensor.toTypedArray()
+  return arr instanceof Float32Array ? arr : Float32Array.from(arr)
 }
 
 export class Talker {
@@ -45,8 +57,13 @@ export class Talker {
     embeddings: Float32Array,
     kvCache: Record<string, Tensor>,
     seqLen?: number,
-  ): Promise<{ logits: Float32Array; hidden: Float32Array; kvCache: Record<string, Tensor>; }> {
-    const inputs: Record<string, Tensor> = { ...kvCache }
+  ): Promise<{ kvCache: Record<string, Tensor> }> {
+    const inputs: Record<string, Promise<Tensor>> = {}
+    for (let i = 0; i < this.config.kvNames.length; i++) {
+      const name = this.config.kvNames[i]
+      const tensor = kvCache[name]
+      inputs[name] = toInputTensor(tensor.toTypedArray() as Float32Array, this.config.kvShapes[i], this.config.accelerator!)
+    }
     const sl = seqLen ?? (embeddings.length / this.config.hiddenDim) | 0
     const negInf = -1e9
     const mask = new Float32Array(1 * 1 * 32 * this.config.cacheLen).fill(negInf)
@@ -62,16 +79,13 @@ export class Talker {
     const paddedEmb = new Float32Array(32 * this.config.hiddenDim)
     paddedEmb.set(embeddings)
 
-    inputs['embeddings'] = new Tensor(paddedEmb, [1, 32, this.config.hiddenDim])
-    inputs['input_pos'] = new Tensor(inputPos, [32])
-    inputs['mask'] = new Tensor(mask, [1, 1, 32, this.config.cacheLen])
+    inputs['embeddings'] = toInputTensor(paddedEmb, [1, 32, this.config.hiddenDim], this.config.accelerator!)
+    inputs['input_pos'] = toInputTensor(inputPos, [32], this.config.accelerator!)
+    inputs['mask'] = toInputTensor(mask, [1, 1, 32, this.config.cacheLen], this.config.accelerator!)
 
-    const result = await this.model.run('prefill_32', inputs)
-    const logits = new Float32Array(await (result['logits'] as Tensor).data())
-    // logits shape: [1, 32, codecVocab + hiddenDim]; take last position
-    const lastLogits = logits.slice(-(this.config.codecVocab + this.config.hiddenDim))
-    const cb0Logits = lastLogits.slice(0, this.config.codecVocab)
-    const hidden = lastLogits.slice(this.config.codecVocab)
+    const resolved: Record<string, Tensor> = {}
+    for (const [key, promise] of Object.entries(inputs)) resolved[key] = await promise
+    const result = await this.model.run('prefill_32', resolved)
 
     const outKv: Record<string, Tensor> = {}
     for (const [key, tensor] of Object.entries(result)) {
@@ -80,7 +94,7 @@ export class Talker {
       }
     }
 
-    return { logits: cb0Logits, hidden, kvCache: outKv }
+    return { kvCache: outKv }
   }
 
   async decode(
@@ -88,18 +102,25 @@ export class Talker {
     kvCache: Record<string, Tensor>,
     pos?: number,
   ): Promise<{ logits: Float32Array; hidden: Float32Array; kvCache: Record<string, Tensor>; }> {
-    const inputs: Record<string, Tensor> = { ...kvCache }
+    const inputs: Record<string, Promise<Tensor>> = {}
+    for (let i = 0; i < this.config.kvNames.length; i++) {
+      const name = this.config.kvNames[i]
+      const tensor = kvCache[name]
+      inputs[name] = toInputTensor(tensor.toTypedArray() as Float32Array, this.config.kvShapes[i], this.config.accelerator!)
+    }
     const p = pos ?? 0
     const negInf = -1e9
     const mask = new Float32Array(1 * 1 * 1 * this.config.cacheLen).fill(negInf)
     for (let i = 0; i <= p && i < this.config.cacheLen; i++) mask[i] = 0
 
-    inputs['embeddings'] = new Tensor(embeddings, [1, 1, this.config.hiddenDim])
-    inputs['input_pos'] = new Tensor(new Int32Array([p]), [1])
-    inputs['mask'] = new Tensor(mask, [1, 1, 1, this.config.cacheLen])
+    inputs['embeddings'] = toInputTensor(embeddings, [1, 1, this.config.hiddenDim], this.config.accelerator!)
+    inputs['input_pos'] = toInputTensor(new Int32Array([p]), [1], this.config.accelerator!)
+    inputs['mask'] = toInputTensor(mask, [1, 1, 1, this.config.cacheLen], this.config.accelerator!)
 
-    const result = await this.model.run('decode', inputs)
-    const logits = new Float32Array(await (result['logits'] as Tensor).data())
+    const resolved: Record<string, Tensor> = {}
+    for (const [key, promise] of Object.entries(inputs)) resolved[key] = await promise
+    const result = await this.model.run('decode', resolved)
+    const logits = readFloat32(result['logits'] as Tensor)
     const cb0Logits = logits.slice(0, this.config.codecVocab)
     const hidden = logits.slice(this.config.codecVocab)
 

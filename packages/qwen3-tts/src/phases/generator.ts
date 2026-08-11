@@ -74,12 +74,14 @@ export class GeneratorPhase {
     this.compileMs = performance.now() - compileStart;
     const talkerShapes = discoverTalkerShapes(talkerModel);
     const mtpShapes = discoverMtpShapes(mtpModel);
-    this.talker = new Talker(talkerModel, talkerShapes);
+    const accelerator = this.context!.backend === 'webgpu' ? 'webgpu' : 'wasm'
+    this.talker = new Talker(talkerModel, { ...talkerShapes, accelerator });
     this.mtp = new MTP(mtpModel, {
       mtpEmbeddings: this.mtpEmb,
       codecEmbeddings: this.codecEmb,
       numCacheSlots: mtpShapes.cacheLen,
       cacheShape: mtpShapes.kvShape,
+      accelerator,
     });
     this.loadMs = performance.now() - loadStart;
   }
@@ -106,7 +108,12 @@ export class GeneratorPhase {
       this.report({ phase: 'prefill', step: 0, total: 1 });
       const kv = this.talker!.createEmptyKv();
       const sl = prefill.length / HIDDEN;
-      let { logits, hidden, kvCache } = await this.talker!.prefill(prefill, kv, sl);
+      const { kvCache } = await this.talker!.prefill(prefill, kv, sl);
+      // prefill_32 has no logits output (reference flow): the first decode
+      // call, seeded with the last prefill embedding row, produces logits.
+      let pos = sl - 1;
+      const lastRow = prefill.slice((sl - 1) * HIDDEN, sl * HIDDEN);
+      let { logits, hidden, kvCache: currentKv } = await this.talker!.decode(lastRow, kvCache, pos);
       const sampleOpts: SampleOpts = {
         temperature: cfg.temperature,
         topK: cfg.topK,
@@ -116,7 +123,6 @@ export class GeneratorPhase {
       const allFrames: number[][] = [];
       let currentLogits = logits;
       let currentHidden = hidden;
-      let currentKv = kvCache;
       const maxFrames = cfg.maxFrames;
       for (let frame = 0; frame < maxFrames; frame++) {
         if (signal?.aborted) throw new InferenceError('CANCELLED', 'Cancelled during generation');
@@ -144,7 +150,8 @@ export class GeneratorPhase {
           for (let i = 0; i < HIDDEN; i++) sumEmb[i] += re[i] / residual.length;
         }
         for (let i = 0; i < HIDDEN; i++) sumEmb[i] += textCond[i];
-        const result = await this.talker!.decode(sumEmb, currentKv, frame + 1);
+        pos += 1;
+        const result = await this.talker!.decode(sumEmb, currentKv, pos);
         currentLogits = result.logits;
         currentHidden = result.hidden;
         currentKv = result.kvCache;

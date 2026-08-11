@@ -13,6 +13,16 @@ export interface MTPConfig {
   numCacheSlots?: number
   numCodebooks?: number
   cacheShape?: number[]
+  accelerator?: 'wasm' | 'webgpu'
+}
+
+async function toInputTensor(data: Float32Array | Int32Array, shape: number[], accelerator: 'wasm' | 'webgpu'): Promise<Tensor> {
+  return new Tensor(data, shape).moveTo(accelerator)
+}
+
+function readFloat32(tensor: Tensor): Float32Array {
+  const arr = tensor.toTypedArray()
+  return arr instanceof Float32Array ? arr : Float32Array.from(arr)
 }
 
 export class MTP {
@@ -21,6 +31,7 @@ export class MTP {
   private numCacheSlots: number
   private numCodebooks: number
   private cacheShape: number[]
+  private accelerator: 'wasm' | 'webgpu'
 
   constructor(
     private model: CompiledModel,
@@ -31,6 +42,7 @@ export class MTP {
     this.numCacheSlots = config.numCacheSlots ?? MTP_CACHE_SLOTS
     this.numCodebooks = config.numCodebooks ?? MTP_CODEBOOKS
     this.cacheShape = config.cacheShape ?? [1, this.numCacheSlots, HIDDEN]
+    this.accelerator = config.accelerator ?? 'wasm'
   }
 
   async predict(
@@ -67,23 +79,25 @@ export class MTP {
       const mask = new Float32Array(this.numCacheSlots).fill(NEG_INF)
       for (let i = 0; i <= t; i++) mask[i] = 0
 
-      const inputs: Record<string, Tensor> = {
-        'args_0': new Tensor(embed, [1, 1, HIDDEN]),
-        'args_1': new Tensor(new Int32Array([t]), [1]),
-        'args_2': new Tensor(mask, [1, 1, 1, this.numCacheSlots]),
-        'args_3': new Tensor(kAll, this.cacheShape),
-        'args_4': new Tensor(vAll, this.cacheShape),
+      const inputs: Record<string, Promise<Tensor>> = {
+        'args_0': toInputTensor(embed, [1, 1, HIDDEN], this.accelerator),
+        'args_1': toInputTensor(new Int32Array([t]), [1], this.accelerator),
+        'args_2': toInputTensor(mask, [1, 1, 1, this.numCacheSlots], this.accelerator),
+        'args_3': toInputTensor(kAll, this.cacheShape, this.accelerator),
+        'args_4': toInputTensor(vAll, this.cacheShape, this.accelerator),
       }
 
-      const result = await this.model.run(inputs)
+      const resolved: Record<string, Tensor> = {}
+      for (const [key, promise] of Object.entries(inputs)) resolved[key] = await promise
+      const result = await this.model.run(resolved)
 
-      const kUpd = new Float32Array(await (result['output_1'] as Tensor).data())
-      const vUpd = new Float32Array(await (result['output_2'] as Tensor).data())
+      const kUpd = readFloat32(result['output_1'] as Tensor)
+      const vUpd = readFloat32(result['output_2'] as Tensor)
       kAll.set(kUpd)
       vAll.set(vUpd)
 
       if (t >= 1) {
-        const logits = new Float32Array(await (result['output_0'] as Tensor).data())
+        const logits = readFloat32(result['output_0'] as Tensor)
         const headLogits = logits.slice((t - 1) * CODEC_VOCAB, t * CODEC_VOCAB)
         codes.push(sample(headLogits, sampleOpts))
       }

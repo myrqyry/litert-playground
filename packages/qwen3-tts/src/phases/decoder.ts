@@ -50,6 +50,7 @@ export class DecoderPhase {
     const codecShapes = discoverCodecShapes(codecModel);
     this.codec = new CodecDecoder(codecModel, {
       chunkSize: codecShapes.chunkSize,
+      accelerator: this.context!.backend === 'webgpu' ? 'webgpu' : 'wasm',
     });
     this.loadMs = performance.now() - loadStart;
   }
