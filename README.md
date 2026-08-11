@@ -54,7 +54,7 @@ as compatibility probes for future LiteRT.js improvements.
 ## Verification record
 
 Real-model and audio results are recorded in
-`docs/superpowers/verification/2026-08-10-package-extraction.md`, including the
+`docs/verification/2026-08-10-package-extraction.md`, including the
 Kokoro browser proof, the Qwen3-TTS runtime classification, and the model-proxy
 exercises. No model or audio result is marked as working from build output
 alone.
