@@ -217,3 +217,35 @@ Qwen3-TTS is classified as a **native/local-runtime capability** (Android LiteRT
 desktop/local server, future WebGPU/runtime improvements), not a browser-WASM
 capability. Browser TTS uses **Kokoro**. Both implementations remain in
 litert-playground with their capability constraints recorded honestly.
+
+### Kokoro browser proof: verified audible speech
+
+Kokoro is the browser-TTS path. The standalone example
+(`examples/minimal-kokoro/`) runs `KokoroPipeline` via `kokoro-js`
+(`KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX',
+{dtype: 'q8', device: 'wasm'})`, model fetched from the Hugging Face hub
+directly; no LiteRT graph involvement).
+
+Automated ladder results (headless Chromium, Aug 2026):
+
+| Step | Result |
+|------|--------|
+| Runtime + model load | pass — `Ready (wasm)` in ~10 s |
+| Synthesize "Testing one two three." | pass — 47,400 Float32 samples |
+| Audio validation | pass — 24,000 Hz mono, 1.975 s, warnings none |
+| Receipt rendered | pass — backend wasm, load 8,136 ms, inference 3,320 ms |
+| Browser playback invocation | pass — `AudioContext` accepted the 24 kHz buffer and `BufferSource.start()` ran |
+
+The exact inference output was exported to a WAV file (16-bit PCM mono,
+24,000 Hz, 47,400 samples, no resampling or effects) and heard manually:
+
+```
+automated output validation:  PASS
+browser playback invocation:  PASS
+manual audible check:         PASS
+manual intelligibility check: PASS
+pitch/speed:                  normal
+obvious corruption/clipping:  none
+```
+
+Kokoro produces validated, intelligible 24 kHz audio in the browser.
