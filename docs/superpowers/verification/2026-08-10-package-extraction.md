@@ -184,3 +184,36 @@ headed (Xvfb), INT8 MTP, same-context prompt-table teardown, and full three
 phase worker isolation. All fail at the same prefill allocation. The remaining
 options are a smaller/quantized generator export path or a different model, not
 further residency restructuring.
+
+### KV256 short-cache Talker export: prefill still fails — Qwen-in-browser ended
+
+As a final export-level experiment, a browser-specific short-KV Talker was
+produced with the official litert-samples conversion toolchain
+(litert-torch 0.9.1, torch 2.12.1; `RECIPE=BOCTAV4 CACHE=256 PREFILL=32,128`
+on the Qwen3-TTS-12Hz-0.6B-Base checkpoint). The export applied correctly:
+the KV256 `model_quantized.tflite` carries `prefill_32`/`prefill_128`/`decode`
+signatures with kv tensors `[1,8,256,128]`/`[1,8,128,256]` and mask last dim
+256 (verified via `ai_edge_litert` Interpreter), cutting the kv cache from
+224 MB to ~56 MB. (One env issue surfaced: litert-torch 0.9.1's
+`LiteRTLMCacheLayer` did not implement the abstract `get_max_length` added by
+transformers 5.15.0's `CacheLayerMixin`; a disposable venv patch added
+`get_max_length -> self.max_cache_len`.)
+
+The clean three-phase proof was re-run with the short-KV Talker: a prompt
+worker built the ~213 KB compact conditioning for "Testing one two three." and
+was terminated; a fresh generator worker compiled the KV256 Talker INT4 plus
+folded MTP INT8, created the kv cache, and attempted the first `prefill_32`.
+
+Result: **prefill still fails** with the identical `tensor_buffer.h:101` at
+`LiteRtTensorBuffer.createManaged` during the first runtime tensor allocation.
+Every structural lever has now been eliminated (codec residency via separate
+worker, MTP precision via INT8, prompt residency via worker teardown, and Talker
+KV capacity via the 256-position export), and a single prefill still cannot
+allocate a managed WASM buffer in a fresh browser worker.
+
+Conclusion: Qwen3-TTS's exported graph set (Talker + MTP + kv + run tensors)
+does not fit the practical browser WASM/JS budget under any residency scheme.
+Qwen3-TTS is classified as a **native/local-runtime capability** (Android LiteRT,
+desktop/local server, future WebGPU/runtime improvements), not a browser-WASM
+capability. Browser TTS uses **Kokoro**. Both implementations remain in
+litert-playground with their capability constraints recorded honestly.
