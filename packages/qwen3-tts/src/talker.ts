@@ -64,7 +64,7 @@ export class Talker {
 
     inputs['embeddings'] = new Tensor(paddedEmb, [1, 32, this.config.hiddenDim])
     inputs['input_pos'] = new Tensor(inputPos, [32])
-    inputs['mask'] = new Tensor(mask, [1, 1, 32, 32])
+    inputs['mask'] = new Tensor(mask, [1, 1, 32, this.config.cacheLen])
 
     const result = await this.model.run('prefill_32', inputs)
     const logits = new Float32Array(await (result['logits'] as Tensor).data())
@@ -96,7 +96,7 @@ export class Talker {
 
     inputs['embeddings'] = new Tensor(embeddings, [1, 1, this.config.hiddenDim])
     inputs['input_pos'] = new Tensor(new Int32Array([p]), [1])
-    inputs['mask'] = new Tensor(mask, [1, 1, 1, 32])
+    inputs['mask'] = new Tensor(mask, [1, 1, 1, this.config.cacheLen])
 
     const result = await this.model.run('decode', inputs)
     const logits = new Float32Array(await (result['logits'] as Tensor).data())
