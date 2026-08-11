@@ -24,6 +24,7 @@ export type GeneratorWorkerRequest =
   | { type: 'cancel'; requestId: number };
 
 export type GeneratorWorkerResponse =
+  | { type: 'booted' }
   | { type: 'ready' }
   | { type: 'progress'; requestId?: number; progress: { phase: string; step: number; total: number } }
   | { type: 'frames'; requestId: number; frames: CodecFrames; phaseReceipt: InferencePhaseReceipt }
@@ -34,6 +35,7 @@ export type DecoderWorkerRequest =
   | { type: 'decode'; requestId: number; frames: CodecFrames };
 
 export type DecoderWorkerResponse =
+  | { type: 'booted' }
   | { type: 'ready' }
   | { type: 'audio'; requestId: number; audio: Float32Array; phaseReceipt: InferencePhaseReceipt }
   | { type: 'error'; requestId?: number; error: SerializedInferenceError };

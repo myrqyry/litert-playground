@@ -109,6 +109,7 @@ describe('Qwen3TtsPipeline', () => {
         },
         get: () => this._respond,
       });
+      queueMicrotask(() => this._respond && this._respond({ data: { type: 'booted' } }));
     });
     vi.stubGlobal('Worker', FakeWorker);
     const context = { backend: 'wasm' as const, assets: { resolve: vi.fn() }, liteRt: { loadModel: vi.fn(), loadNpy: vi.fn(), fetchBuffer: vi.fn() } };

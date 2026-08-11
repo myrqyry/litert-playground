@@ -44,4 +44,9 @@ self.onmessage = async (event: MessageEvent<DecoderWorkerRequest>) => {
   }
 };
 
+// Signal the host that this worker's onmessage handler is installed and ready
+// to receive the initialize message (the host must not post initialize before
+// this arrives, or the message is dropped in the pre-handler event loop).
+self.postMessage({ type: 'booted' } satisfies DecoderWorkerResponse);
+
 export {};

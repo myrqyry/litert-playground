@@ -58,6 +58,7 @@ export async function runHostGenerator(
   config: QwenTtsConfig,
   onProgress?: ProgressHandler,
 ): Promise<GeneratorOutcome> {
+  await waitFor<GeneratorWorkerResponse>(worker, 'booted');
   const init = waitFor<GeneratorWorkerResponse>(worker, 'ready');
   worker.postMessage({ type: 'initialize', variant, modelBase } satisfies GeneratorWorkerRequest);
   await init;
@@ -74,6 +75,7 @@ export async function runHostDecoder(
   frames: CodecFrames,
   onProgress?: ProgressHandler,
 ): Promise<DecoderOutcome> {
+  await waitFor<DecoderWorkerResponse>(worker, 'booted');
   const init = waitFor<DecoderWorkerResponse>(worker, 'ready');
   worker.postMessage({ type: 'initialize', variant, modelBase } satisfies DecoderWorkerRequest);
   await init;
