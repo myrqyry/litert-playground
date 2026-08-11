@@ -389,6 +389,9 @@ importers:
       '@litert-playground/inference-core':
         specifier: workspace:*
         version: link:../inference-core
+      '@litert-playground/runtime-litert':
+        specifier: workspace:*
+        version: link:../runtime-litert
       '@litertjs/core':
         specifier: ^2.5.3
         version: 2.5.3
