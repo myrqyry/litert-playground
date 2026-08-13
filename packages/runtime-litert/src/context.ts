@@ -23,6 +23,7 @@ import type {
   LiteRtPreflightResult,
   LiteRtRuntimeOptions,
   LiteRtTelemetryRecord,
+  LiteRtTypedArray,
   ManagedLiteRtRuntime,
   ManagedLiteRtRuntimeContext,
   WebNNRuntimeOptions,
@@ -58,6 +59,13 @@ function isAbort(cause: unknown, signal?: AbortSignal): boolean {
   return cause instanceof Error && cause.name === 'AbortError'
 }
 
+function createTensorFromTypedArray(data: LiteRtTypedArray, shape: number[]): Tensor {
+  return Tensor.fromTypedArray(
+    data as Parameters<typeof Tensor.fromTypedArray>[0],
+    shape,
+  )
+}
+
 function createZeroTensor(details: TensorDetails, maxTensorElements: number): Tensor {
   const shape = [...details.shape]
   if (shape.some((dimension) => !Number.isInteger(dimension) || dimension <= 0)) {
@@ -77,11 +85,13 @@ function createZeroTensor(details: TensorDetails, maxTensorElements: number): Te
 
   switch (details.dtype) {
     case 'float32':
-      return Tensor.fromTypedArray(new Float32Array(size), shape)
+      return createTensorFromTypedArray(new Float32Array(size), shape)
     case 'int32':
-      return Tensor.fromTypedArray(new Int32Array(size), shape)
+      return createTensorFromTypedArray(new Int32Array(size), shape)
+    case 'int8':
+      return createTensorFromTypedArray(new Int8Array(size), shape)
     case 'uint8':
-      return Tensor.fromTypedArray(new Uint8Array(size), shape)
+      return createTensorFromTypedArray(new Uint8Array(size), shape)
     default:
       throw new InferenceError('INVALID_INPUT', `Unsupported preflight tensor type: ${details.dtype}`, {
         stage: 'preflight',
@@ -174,7 +184,7 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
           const result = options.signature
             ? await model.run(options.signature, inputs)
             : await model.run(inputs)
-          return (Array.isArray(result) ? result : result) as LiteRtModelOutput
+          return result as LiteRtModelOutput
         },
         signal,
         `litert-preflight:${path}`,
@@ -223,12 +233,12 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
     this.tensorCopyCount = 0
   }
 
-  createTensor(data: Float32Array | Int32Array | Uint8Array, shape: number[]): Tensor {
+  createTensor(data: LiteRtTypedArray, shape: number[]): Tensor {
     this.assertUsable()
-    return Tensor.fromTypedArray(data, shape)
+    return createTensorFromTypedArray(data, shape)
   }
 
-  readTensor<T extends Float32Array | Int32Array | Uint8Array>(tensor: Tensor): T {
+  readTensor<T extends LiteRtTypedArray>(tensor: Tensor): T {
     this.assertUsable()
     this.tensorCopyCount += 1
     const latest = this.telemetry[this.telemetry.length - 1]
@@ -292,6 +302,10 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
           new Uint8Array(buffer),
           this.compileOptions(backend, options.webNNOptions ?? this.options.webNNOptions),
         )
+        this.assertUsable()
+        if (signal?.aborted) {
+          throw new InferenceError('CANCELLED', `Model load cancelled for ${path}`, { stage: 'compile', asset: path })
+        }
         const entry: LoadedModel = {
           model,
           modelPath: path,
@@ -313,6 +327,7 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
       } catch (cause) {
         lastError = cause
         if (backend === 'webgpu') this.webGpuDevicePromise = null
+        if (cause instanceof InferenceError && cause.message.includes('disposed')) throw cause
         if (isAbort(cause, signal)) {
           throw new InferenceError('CANCELLED', `Model load cancelled for ${path}`, {
             stage: 'compile',
@@ -347,7 +362,7 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
         async () => {
           inferenceStartedAt = performance.now()
           const output = signature ? await model.run(signature, input) : await model.run(input)
-          return (Array.isArray(output) ? output : output) as LiteRtModelOutput
+          return output as LiteRtModelOutput
         },
         signal,
         options.label ?? `litert:${path}`,
