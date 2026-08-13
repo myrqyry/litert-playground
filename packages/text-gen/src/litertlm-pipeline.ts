@@ -1,4 +1,5 @@
 import {
+  type ModelManifest,
   type Pipeline,
   type PipelineProgress,
   type PipelineStatus,
@@ -46,9 +47,7 @@ export interface LiteRtLmTextConfig extends TextGenerationConfig {
 const DEFAULTS: Pick<LiteRtLmTextConfig, 'model' | 'maxContextTokens'> = {
   model: 'litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B.litertlm',
   maxContextTokens: 4096,
-};
-
-function toLiteRtMessages(input: TextGenerationInput): Array<{ role: string; content: string }> {
+};function toLiteRtMessages(input: TextGenerationInput): Array<{ role: string; content: string }> {
   const messages: Array<{ role: string; content: string }> = [];
   if (input.systemPrompt) {
     messages.push({ role: 'system', content: input.systemPrompt });
@@ -84,7 +83,7 @@ async function readStream(
 export class LiteRtLmTextPipeline
   implements Pipeline<TextGenerationInput, TextInferenceResult, LiteRtLmTextConfig>
 {
-  readonly manifest = litertLmManifest;
+  readonly manifest: ModelManifest;
   status: PipelineStatus = 'idle';
   onProgress?: (progress: PipelineProgress) => void;
 
@@ -92,6 +91,10 @@ export class LiteRtLmTextPipeline
   private engine: LiteRtLmEngine | null = null;
   private conversation: LiteRtLmConversation | null = null;
   private loadMs = 0;
+
+  constructor(manifest: ModelManifest = litertLmManifest) {
+    this.manifest = manifest;
+  }
 
   async load(context: RuntimeContext): Promise<void> {
     if (this.status === 'ready') return;
@@ -102,8 +105,14 @@ export class LiteRtLmTextPipeline
       this.report({ phase: 'loading', step: 1, total: 2 });
       const module = (await import('@litert-lm/core')) as unknown as LiteRtLmModule;
       this.report({ phase: 'loading', step: 2, total: 2 });
+      const model =
+        this.manifest.assets.find((a) => a.id === 'model')?.path ??
+        this.manifest.assets[0]?.path ??
+        DEFAULTS.model;
+      const backend = context.backend === 'webnn' ? undefined : context.backend;
       this.engine = await module.Engine.create({
-        model: DEFAULTS.model,
+        model,
+        backend,
         mainExecutorSettings: { maxNumTokens: DEFAULTS.maxContextTokens },
       });
       this.loadMs = performance.now() - loadStart;

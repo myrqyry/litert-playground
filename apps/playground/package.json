@@ -13,10 +13,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@litert-playground/encoder": "workspace:*",
     "@litert-playground/inference-core": "workspace:*",
     "@litert-playground/kokoro": "workspace:*",
+    "@litert-playground/retrieval": "workspace:*",
     "@litert-playground/runtime-litert": "workspace:*",
     "@litert-playground/qwen3-tts": "workspace:*",
+    "@litert-playground/text-gen": "workspace:*",
     "@litertjs/core": "^2.5.3",
     "@tailwindcss/vite": "^4.3.3",
     "kokoro-js": "^1.2.1",

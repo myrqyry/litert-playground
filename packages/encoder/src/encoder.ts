@@ -1,0 +1,182 @@
+import {
+  type EmbeddingInferenceResult,
+  type ModelManifest,
+  type Pipeline,
+  type PipelineProgress,
+  type PipelineStatus,
+  type RuntimeContext,
+} from '@litert-playground/inference-core'
+import { encoder230mManifest } from './manifest'
+
+export interface EncoderInput {
+  text: string
+}
+
+export interface EncoderConfig {
+  maxTokens?: number
+  progressCallback?: (p: PipelineProgress) => void
+}
+
+export interface EncoderPipelineOptions {
+  manifest?: typeof encoder230mManifest
+}
+
+export interface TokenClassificationResult {
+  kind: 'token-classification'
+  tokens: number
+  dimensions: number
+  scores: Float32Array
+}
+
+export type EncoderResult = EmbeddingInferenceResult | TokenClassificationResult
+
+interface TransformersTokenizer {
+  encode: (
+    text: string,
+    options?: { padding?: boolean | string; truncation?: boolean | string; max_length?: number },
+  ) => Promise<{ input_ids: { data: Int32Array; dims: number[] } | { tolist(): number[][] } }>
+}
+
+interface TransformersModule {
+  AutoTokenizer: {
+    from_pretrained: (
+      repo: string,
+      options?: { subfolder?: string; dtype?: string },
+    ) => Promise<TransformersTokenizer>
+  }
+}
+
+interface CompiledModel {
+  run: (input: unknown) => Promise<Array<{ data: () => Promise<Float32Array | Int32Array> }>>
+}
+
+const DEFAULTS = { maxTokens: 512 }
+
+function isEmbeddingManifest(manifest: ModelManifest): boolean {
+  return manifest.capabilities.includes('text-embedding')
+}
+
+export class EncoderPipeline implements Pipeline<EncoderInput, EncoderResult, EncoderConfig> {
+  readonly manifest: ModelManifest
+  status: PipelineStatus = 'idle'
+  onProgress?: (progress: PipelineProgress) => void
+
+  private context: RuntimeContext | null = null
+  private model: CompiledModel | null = null
+  private tokenizer: TransformersTokenizer | null = null
+  private loadMs = 0
+
+  constructor(options: EncoderPipelineOptions = {}) {
+    this.manifest = options.manifest ?? encoder230mManifest
+  }
+
+  async load(context: RuntimeContext): Promise<void> {
+    if (this.status === 'ready') return
+    this.status = 'loading'
+    this.context = context
+    const start = performance.now()
+    try {
+      this.report({ phase: 'loading-tokenizer', step: 1, total: 3 })
+      const transformers = (await import('@huggingface/transformers')) as unknown as TransformersModule
+      const tokenizerAsset = this.manifest.assets.find((a) => a.id === 'tokenizer')
+      this.tokenizer = await transformers.AutoTokenizer.from_pretrained(tokenizerAsset?.path ?? '', {
+        subfolder: this.manifest.assets[0].path.split('/').slice(0, 2).join('/'),
+      })
+      this.report({ phase: 'loading-model', step: 2, total: 3 })
+      const modelPath = this.manifest.assets[0].path
+      this.model = (await context.liteRt.loadModel(modelPath)) as CompiledModel
+      this.report({ phase: 'ready', step: 3, total: 3 })
+      this.loadMs = performance.now() - start
+      this.status = 'ready'
+    } catch (e) {
+      this.status = 'error'
+      throw e instanceof Error ? e : new Error(String(e))
+    }
+  }
+
+  async run(input: EncoderInput, config?: EncoderConfig): Promise<EncoderResult> {
+    if (this.status !== 'ready' || !this.model || !this.tokenizer) {
+      throw new Error('Encoder pipeline not ready')
+    }
+    const maxTokens = config?.maxTokens ?? DEFAULTS.maxTokens
+    this.status = 'running'
+    try {
+      const encoded = await this.tokenizer.encode(input.text, {
+        padding: 'max_length',
+        truncation: true,
+        max_length: maxTokens,
+      })
+      const inputIds = toInt32Array(encoded.input_ids)
+      const outputs = await this.model.run(createInputTensor(inputIds, maxTokens))
+      const first = outputs[0]
+      const data = await first.data()
+      const floats = data instanceof Float32Array ? data : new Float32Array(data)
+      if (isEmbeddingManifest(this.manifest)) {
+        const dim = floats.length / maxTokens
+        return {
+          kind: 'embedding',
+          values: meanPool(floats, maxTokens, dim),
+          dimensions: dim,
+        }
+      }
+      return {
+        kind: 'token-classification',
+        tokens: maxTokens,
+        dimensions: floats.length / maxTokens,
+        scores: floats,
+      }
+    } finally {
+      this.status = 'ready'
+    }
+  }
+
+  async dispose(): Promise<void> {
+    this.model = null
+    this.tokenizer = null
+    this.context = null
+    this.status = 'disposed'
+  }
+
+  private report(progress: PipelineProgress): void {
+    this.onProgress?.(progress)
+  }
+}
+
+type EncodedInputIds = { data: Int32Array; dims: number[] } | { tolist(): number[][] }
+
+function toInt32Array(inputIds: EncodedInputIds): Int32Array {
+  if ('data' in inputIds) {
+    return inputIds.data
+  }
+  const rows = inputIds.tolist()
+  return new Int32Array(rows.length > 0 ? rows[0] : [])
+}
+
+function createInputTensor(ids: Int32Array, seqLen: number): unknown {
+  return {
+    data: ids.length === seqLen ? ids : pad(ids, seqLen),
+    shape: [1, seqLen],
+  }
+}
+
+function pad(ids: Int32Array, len: number): Int32Array {
+  const out = new Int32Array(len)
+  out.set(ids.subarray(0, Math.min(ids.length, len)))
+  return out
+}
+
+export function meanPool(floats: Float32Array, tokens: number, dim: number): Float32Array {
+  const out = new Float32Array(dim)
+  const tokenCount = Math.floor(floats.length / dim)
+  const steps = Math.min(tokens, tokenCount)
+  if (steps === 0) return out
+  for (let t = 0; t < steps; t++) {
+    for (let d = 0; d < dim; d++) {
+      out[d] += floats[t * dim + d]
+    }
+  }
+  for (let d = 0; d < dim; d++) {
+    out[d] /= steps
+  }
+  return out
+}

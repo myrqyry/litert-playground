@@ -15,6 +15,13 @@ export type Capability =
   | 'audio-generation'
   | 'text-embedding'
   | 'audio-embedding'
+  | 'image-text-to-text'
+  | 'token-classification'
+  | 'text-classification'
+  | 'reranking'
+  | 'multi-vector-embedding'
+  | 'policy-classification'
+  | 'reasoning'
 
 export type Backend = 'webgpu' | 'wasm' | 'webnn'
 export type VerificationState = 'pass' | 'fail' | 'untested'
@@ -81,6 +88,7 @@ export type InferenceResult =
   | TextInferenceResult
   | ImageInferenceResult
   | EmbeddingInferenceResult
+  | MultiVectorEmbeddingResult
   | TensorInferenceResult
 
 export interface AudioInferenceResult {
@@ -95,6 +103,8 @@ export interface AudioInferenceResult {
 export interface TextInferenceResult {
   kind: 'text'
   text: string
+  reasoning?: string
+  receipt?: InferenceReceipt
 }
 
 export interface ImageInferenceResult {
@@ -108,6 +118,52 @@ export interface EmbeddingInferenceResult {
   kind: 'embedding'
   values: Float32Array
   dimensions: number
+}
+
+export interface MultiVectorEmbeddingResult {
+  kind: 'multi-vector-embedding'
+  values: Float32Array
+  tokens: number
+  dimensions: number
+}
+
+export interface RetrievalResult<T = unknown> {
+  id: string
+  score: number
+  payload?: T
+}
+
+export interface BoundingBox {
+  x: number
+  y: number
+  width: number
+  height: number
+  label?: string
+  score?: number
+}
+
+export interface Point {
+  x: number
+  y: number
+}
+
+export interface ImageInput {
+  width: number
+  height: number
+  data: Uint8Array
+  mimeType?: string
+}
+
+export interface VisionLanguageInput {
+  image: ImageInput
+  prompt: string
+}
+
+export interface VisionLanguageResult {
+  text: string
+  boxes?: BoundingBox[]
+  points?: Point[]
+  receipt: InferenceReceipt
 }
 
 export interface TensorInferenceResult {

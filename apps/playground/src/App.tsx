@@ -1,12 +1,23 @@
 import { useState } from 'react'
 import ModelRunner from './components/ModelRunner'
 import { Qwen3TtsPanel } from './components/Qwen3TtsPanel'
+import { LfmPipelinePanel } from './components/LfmPipelinePanel'
 import { registeredAdapters } from './adapters/registry'
 import type { ModelAdapter } from './adapters/types'
 
 const ttsEntry: ModelAdapter = {
   modelId: 'qwen3-tts',
   metadata: { name: 'Qwen3-TTS (Speech Synthesis)', description: 'Multilingual TTS via 3-graph pipeline', modelPath: '', tags: ['tts', 'pipeline'] },
+  inputSpecs: [],
+  outputSpecs: [],
+  isPipeline: true,
+  prepareInputs: () => ({}),
+  parseOutputs: async () => ({}),
+}
+
+const lfmEntry: ModelAdapter = {
+  modelId: 'lfm2.5-pipelines',
+  metadata: { name: 'Gemma 4 + LFM2.5 Pipelines', description: 'Gemma 4 and LFM2.5 text-gen, ColBERT retrieval, and encoders via shared pipelines', modelPath: '', tags: ['llm', 'retrieval', 'encoder', 'pipeline'] },
   inputSpecs: [],
   outputSpecs: [],
   isPipeline: true,
@@ -34,9 +45,26 @@ export default function App() {
     )
   }
 
+  if (selectedId === 'lfm2.5-pipelines') {
+    return (
+      <div className="min-h-screen bg-surface-dim">
+        <div className="mx-auto max-w-2xl p-4">
+          <button
+            className="mb-4 text-sm text-secondary transition-colors hover:text-on-secondary-container"
+            onClick={() => setSelectedId(null)}
+          >
+            ← Back to model list
+          </button>
+          <h1 className="mb-4 text-2xl font-bold text-on-surface">Gemma 4 + LFM2.5 Pipelines</h1>
+          <LfmPipelinePanel />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <ModelRunner
-      adapters={[...registeredAdapters, ttsEntry]}
+      adapters={[...registeredAdapters, ttsEntry, lfmEntry]}
       selectedId={selectedId}
       onSelect={setSelectedId}
     />

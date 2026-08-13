@@ -49,3 +49,25 @@ export function checkEmbeddingValid(values: Float32Array, dimensions: number): s
   if (normSq < 1e-12) warnings.push('embedding: near-zero vector')
   return warnings
 }
+
+export function checkMultiVectorEmbeddingValid(
+  values: Float32Array,
+  tokens: number,
+  dimensions: number,
+): string[] {
+  const warnings: string[] = []
+  if (values.length === 0) warnings.push('multi-vector-embedding: empty values')
+  if (values.length !== tokens * dimensions) {
+    warnings.push('multi-vector-embedding: length does not equal tokens * dimensions')
+  }
+  for (let i = 0; i < values.length; i++) {
+    if (!isFinite(values[i])) { warnings.push('multi-vector-embedding: contains NaN/Infinity'); break }
+  }
+  for (let t = 0; t < tokens; t++) {
+    let normSq = 0
+    const offset = t * dimensions
+    for (let d = 0; d < dimensions; d++) normSq += values[offset + d] * values[offset + d]
+    if (normSq < 1e-12) { warnings.push(`multi-vector-embedding: token ${t} is near-zero`); break }
+  }
+  return warnings
+}

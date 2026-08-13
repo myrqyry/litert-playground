@@ -2,6 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeContext } from '@litert-playground/inference-core';
 import { TransformersTextPipeline } from "./transformers-pipeline";
 import { LiteRtLmTextPipeline } from "./litertlm-pipeline";
+import {
+  lfm2_5InstructManifest,
+  lfm2_5InstructInt8Manifest,
+  lfm2_5ThinkingManifest,
+  lfm2_5ThinkingInt8Manifest,
+  selectTextGenerationManifest,
+} from "./manifest";
 
 const { mockPipeline, mockEngineCreate, mockSendMessageStreaming } = vi.hoisted(() => ({
   mockPipeline: vi.fn(),
@@ -144,5 +151,37 @@ describe("LiteRtLmTextPipeline", () => {
       })
     );
     expect(mockSendMessageStreaming).toHaveBeenCalled();
+  });
+
+  it("loads the manifest's model path instead of a hardcoded default", async () => {
+    const p = new LiteRtLmTextPipeline(lfm2_5ThinkingManifest);
+    await p.load(fakeContext());
+
+    expect(mockEngineCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model:
+          "litert-community/LFM2.5-1.2B-Thinking/resolve/main/LFM2.5-1.2B-Thinking_int4.litertlm",
+        backend: "wasm",
+      })
+    );
+  });
+});
+
+describe("selectTextGenerationManifest", () => {
+  it("selects the reasoning model for the reasoning capability", () => {
+    expect(selectTextGenerationManifest("reasoning")).toBe(lfm2_5ThinkingManifest);
+    expect(selectTextGenerationManifest("reasoning", "deep")).toBe(lfm2_5ThinkingInt8Manifest);
+  });
+
+  it("selects the instruct model for text generation", () => {
+    expect(selectTextGenerationManifest("text-generation")).toBe(lfm2_5InstructManifest);
+    expect(selectTextGenerationManifest("text-generation", "deep")).toBe(
+      lfm2_5InstructInt8Manifest
+    );
+  });
+
+  it("advertises the reasoning capability only on thinking manifests", () => {
+    expect(lfm2_5ThinkingManifest.capabilities).toContain("reasoning");
+    expect(lfm2_5InstructManifest.capabilities).not.toContain("reasoning");
   });
 });

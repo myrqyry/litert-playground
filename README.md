@@ -90,7 +90,9 @@ in consuming applications rather than in the shared runtime packages.
 | `packages/runtime-litert` | `@litert-playground/runtime-litert` | Managed LiteRT.js runtime, backend selection, caching, preflight, coordination, telemetry |
 | `packages/kokoro` | `@litert-playground/kokoro` | Kokoro TTS through `kokoro-js` using q8/WASM |
 | `packages/qwen3-tts` | `@litert-playground/qwen3-tts` | Phased Qwen3-TTS pipeline over talker, MTP, and codec LiteRT graphs |
-| `packages/text-gen` | `@litert-playground/text-gen` | Text generation experiments; currently frozen |
+| `packages/text-gen` | `@litert-playground/text-gen` | `LiteRtLmTextPipeline` over `@litert-lm/core` plus model manifests (LFM2.5 1.2B instruct/thinking, Gemma 4 E2B/E4B, Qwen3) and capability-based manifest selection |
+| `packages/retrieval` | `@litert-playground/retrieval` | `ColBertPipeline` (multi-vector embeddings) and late-interaction scoring (`rankColBert`, `rankDense`) |
+| `packages/encoder` | `@litert-playground/encoder` | `EncoderPipeline` over `@litertjs/core` — text embeddings and token classification (LFM2.5 Encoder-230M, Spellchecker, Policy-Linter) |
 | `examples/minimal-kokoro` | `@litert-playground/example-kokoro` | Minimal standalone Kokoro browser example |
 | `examples/minimal-qwen3-tts` | `@litert-playground/example-qwen3-tts` | Minimal Qwen3-TTS example and compatibility harness |
 
