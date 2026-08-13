@@ -22,7 +22,10 @@ describe('createLiteRtRuntime', () => {
     expect(loadLiteRt).toHaveBeenCalledWith('https://assets.test/qwen/wasm/', { jspi: true })
     expect(context.backend).toBe('webgpu')
     await context.liteRt.loadModel('model.bin')
-    expect(assets.resolve).toHaveBeenCalledWith({ id: 'model.bin', path: 'model.bin' }, { signal: undefined })
+    expect(assets.resolve).toHaveBeenCalledWith(
+      { id: 'model.bin', path: 'model.bin' },
+      { signal: expect.any(AbortSignal) },
+    )
     expect(loadAndCompile).toHaveBeenCalledWith(expect.any(Uint8Array), { accelerator: 'webgpu' })
     expect(setWebGpuDevice).toHaveBeenCalledWith(device)
   })

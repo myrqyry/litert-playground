@@ -23,6 +23,24 @@ describe('workspace package boundaries', () => {
     expect(qwen).toContain('@litert-playground/inference-core')
   })
 
+  it('keeps the playground on the shared managed runtime instead of rebuilding LiteRT plumbing', async () => {
+    const runner = await text('apps/playground/src/hooks/useModelRunner.ts')
+    expect(runner).toContain("from '@litert-playground/runtime-litert'")
+    expect(runner).toContain('createLiteRtRuntime')
+    expect(runner).not.toMatch(/\bloadLiteRt\b|\bloadAndCompile\b/)
+  })
+
+  it('keeps managed runtime policy generic and product-independent', async () => {
+    const runtime = [
+      await text('packages/runtime-litert/src/context.ts'),
+      await text('packages/runtime-litert/src/coordinator.ts'),
+      await text('packages/runtime-litert/src/types.ts'),
+    ].join('\n')
+    expect(runtime).not.toMatch(/podqast|episode|streamer|earthbound|\bobs\b/i)
+    expect(runtime).toContain('preflight')
+    expect(runtime).toContain('telemetry')
+  })
+
   it('keeps Kokoro externally consumable through the shared core contract', async () => {
     const manifest = JSON.parse(await text('packages/kokoro/package.json')) as {
       dependencies?: Record<string, string>
