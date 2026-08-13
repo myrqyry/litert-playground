@@ -32,6 +32,8 @@ interface LoadedModel extends LiteRtModelInfo {
   model: CompiledModel
 }
 
+const DEFAULT_TELEMETRY_LIMIT = 512
+
 function resolveBase(assetBase: string | undefined): string {
   const pageBase = (globalThis as { location?: { href: string } }).location?.href ?? 'http://localhost/'
   return new URL(assetBase ?? 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.3/', pageBase).href
@@ -49,6 +51,11 @@ function inputCount(input: LiteRtModelInput): number {
   if (Array.isArray(input)) return input.length
   if (input instanceof Tensor) return 1
   return Object.keys(input).length
+}
+
+function isAbort(cause: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return true
+  return cause instanceof Error && cause.name === 'AbortError'
 }
 
 function createZeroTensor(details: TensorDetails, maxTensorElements: number): Tensor {
@@ -84,9 +91,12 @@ function createZeroTensor(details: TensorDetails, maxTensorElements: number): Te
 
 class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
   private readonly models = new Map<string, LoadedModel>()
+  private readonly pendingLoads = new Map<string, Promise<LoadedModel>>()
   private readonly telemetry: LiteRtTelemetryRecord[] = []
   private lastResolvedBackend: Backend
   private webGpuDevicePromise: Promise<unknown> | null = null
+  private tensorCopyCount = 0
+  private disposed = false
 
   constructor(
     private readonly options: LiteRtRuntimeOptions,
@@ -101,10 +111,161 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
   }
 
   async loadModel(path: string, options: LiteRtModelOptions = {}): Promise<CompiledModel> {
+    this.assertUsable()
     const requestKey = this.requestKey(path, options)
     const cached = this.models.get(requestKey)
     if (cached) return cached.model
 
+    const pending = this.pendingLoads.get(requestKey)
+    if (pending) return (await pending).model
+
+    const load = this.compileModel(path, options, requestKey)
+    this.pendingLoads.set(requestKey, load)
+    try {
+      return (await load).model
+    } finally {
+      this.pendingLoads.delete(requestKey)
+    }
+  }
+
+  async loadNpy(path: string, signal?: AbortSignal): Promise<Float32Array> {
+    this.assertUsable()
+    return parseNpy(await this.resolve(path, signal))
+  }
+
+  async fetchBuffer(path: string, signal?: AbortSignal): Promise<ArrayBuffer> {
+    this.assertUsable()
+    return this.resolve(path, signal)
+  }
+
+  async predict(
+    path: string,
+    input: LiteRtModelInput,
+    options: LiteRtModelOptions & { label?: string } = {},
+  ): Promise<LiteRtModelOutput> {
+    return this.run(path, input, undefined, options)
+  }
+
+  async predictWithSignature(
+    path: string,
+    signature: string,
+    input: LiteRtModelInput,
+    options: LiteRtModelOptions & { label?: string } = {},
+  ): Promise<LiteRtModelOutput> {
+    return this.run(path, input, signature, options)
+  }
+
+  async preflight(path: string, options: LiteRtPreflightOptions = {}): Promise<LiteRtPreflightResult> {
+    this.assertUsable()
+    const signal = options.signal ?? this.options.signal
+    const model = await this.loadModel(path, options)
+    const info = this.requireModelInfo(path, options)
+    const inputDetails = model.getInputDetails()
+    const outputDetails = model.getOutputDetails()
+    const maxTensorElements = options.maxTensorElements ?? 10_000_000
+    const inputs = options.createInputs?.(inputDetails)
+      ?? inputDetails.map((details) => createZeroTensor(details, maxTensorElements))
+
+    let inferenceStartedAt = 0
+    try {
+      const output = await (this.options.coordinator ?? defaultCoordinator).run(
+        async () => {
+          inferenceStartedAt = performance.now()
+          const result = options.signature
+            ? await model.run(options.signature, inputs)
+            : await model.run(inputs)
+          return (Array.isArray(result) ? result : result) as LiteRtModelOutput
+        },
+        signal,
+        `litert-preflight:${path}`,
+      )
+      const inferenceDurationMs = performance.now() - inferenceStartedAt
+      const result: LiteRtPreflightResult = {
+        ...info,
+        inputDetails,
+        outputDetails,
+        outputCount: outputCount(output),
+        inferenceDurationMs,
+      }
+      this.record({
+        ...info,
+        event: 'preflight',
+        timestamp: new Date().toISOString(),
+        inferenceDurationMs,
+        inputCount: inputCount(inputs),
+        outputCount: result.outputCount,
+        tensorCopyCount: this.tensorCopyCount,
+      })
+      return result
+    } catch (cause) {
+      if (cause instanceof InferenceError) throw cause
+      if (isAbort(cause, signal)) {
+        throw new InferenceError('CANCELLED', `Preflight cancelled for ${path}`, { stage: 'preflight', cause })
+      }
+      throw new InferenceError('INFERENCE_FAILED', `Preflight failed for ${path}`, { stage: 'preflight', cause })
+    }
+  }
+
+  getModelInfo(path: string, options: LiteRtModelOptions = {}): LiteRtModelInfo | undefined {
+    const entry = this.models.get(this.requestKey(path, options))
+      ?? [...this.models.values()].find((candidate) => candidate.modelPath === path)
+    if (!entry) return undefined
+    const { model: _model, ...info } = entry
+    return info
+  }
+
+  getTelemetry(): readonly LiteRtTelemetryRecord[] {
+    return [...this.telemetry]
+  }
+
+  clearTelemetry(): void {
+    this.telemetry.length = 0
+    this.tensorCopyCount = 0
+  }
+
+  createTensor(data: Float32Array | Int32Array | Uint8Array, shape: number[]): Tensor {
+    this.assertUsable()
+    return Tensor.fromTypedArray(data, shape)
+  }
+
+  readTensor<T extends Float32Array | Int32Array | Uint8Array>(tensor: Tensor): T {
+    this.assertUsable()
+    this.tensorCopyCount += 1
+    const latest = this.telemetry[this.telemetry.length - 1]
+    if (latest && (latest.event === 'inference' || latest.event === 'preflight')) {
+      latest.tensorCopyCount = this.tensorCopyCount
+    }
+    return tensor.toTypedArray() as T
+  }
+
+  supportsGpuBufferTensors(): boolean {
+    return typeof (Tensor as unknown as { fromGpuBuffer?: unknown }).fromGpuBuffer === 'function'
+  }
+
+  disposeModel(path: string): void {
+    for (const [key, entry] of this.models.entries()) {
+      if (entry.modelPath === path) this.models.delete(key)
+    }
+    for (const [key] of this.pendingLoads.entries()) {
+      if (key.startsWith(`${path}::`)) this.pendingLoads.delete(key)
+    }
+  }
+
+  dispose(): void {
+    this.disposed = true
+    this.models.clear()
+    this.pendingLoads.clear()
+    this.telemetry.length = 0
+    this.webGpuDevicePromise = null
+    this.tensorCopyCount = 0
+  }
+
+  private async compileModel(
+    path: string,
+    options: LiteRtModelOptions,
+    requestKey: string,
+  ): Promise<LoadedModel> {
+    const signal = options.signal ?? this.options.signal
     const preference = options.accelerator ?? this.options.backend ?? 'auto'
     const supported = options.supportedBackends ?? this.options.supportedBackends ?? {}
     const candidates = rankBackends(this.capabilities, supported, preference)
@@ -115,10 +276,14 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
       })
     }
 
-    const buffer = await this.resolve(path)
+    const buffer = await this.resolve(path, signal)
     let lastError: unknown
 
     for (let index = 0; index < candidates.length; index += 1) {
+      if (signal?.aborted) {
+        throw new InferenceError('CANCELLED', `Model load cancelled for ${path}`, { stage: 'compile', asset: path })
+      }
+
       const backend = candidates[index]
       const compileStart = performance.now()
       try {
@@ -138,10 +303,23 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
         this.models.set(requestKey, entry)
         this.lastResolvedBackend = backend
         const { model: _model, ...info } = entry
-        this.record({ ...info, event: 'compile', timestamp: new Date().toISOString() })
-        return model
+        this.record({
+          ...info,
+          event: 'compile',
+          timestamp: new Date().toISOString(),
+          tensorCopyCount: this.tensorCopyCount,
+        })
+        return entry
       } catch (cause) {
         lastError = cause
+        if (backend === 'webgpu') this.webGpuDevicePromise = null
+        if (isAbort(cause, signal)) {
+          throw new InferenceError('CANCELLED', `Model load cancelled for ${path}`, {
+            stage: 'compile',
+            asset: path,
+            cause,
+          })
+        }
         if (preference !== 'auto') break
       }
     }
@@ -153,137 +331,45 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
     })
   }
 
-  async loadNpy(path: string): Promise<Float32Array> {
-    return parseNpy(await this.resolve(path))
-  }
-
-  async fetchBuffer(path: string): Promise<ArrayBuffer> {
-    return this.resolve(path)
-  }
-
-  async predict(
-    path: string,
-    input: LiteRtModelInput,
-    options: LiteRtModelOptions & { signal?: AbortSignal; label?: string } = {},
-  ): Promise<LiteRtModelOutput> {
-    return this.run(path, input, undefined, options)
-  }
-
-  async predictWithSignature(
-    path: string,
-    signature: string,
-    input: LiteRtModelInput,
-    options: LiteRtModelOptions & { signal?: AbortSignal; label?: string } = {},
-  ): Promise<LiteRtModelOutput> {
-    return this.run(path, input, signature, options)
-  }
-
-  async preflight(path: string, options: LiteRtPreflightOptions = {}): Promise<LiteRtPreflightResult> {
-    const model = await this.loadModel(path, options)
-    const info = this.requireModelInfo(path, options)
-    const inputDetails = model.getInputDetails()
-    const outputDetails = model.getOutputDetails()
-    const maxTensorElements = options.maxTensorElements ?? 10_000_000
-    const inputs = options.createInputs?.(inputDetails)
-      ?? inputDetails.map((details) => createZeroTensor(details, maxTensorElements))
-
-    const startedAt = performance.now()
-    const output = await (this.options.coordinator ?? defaultCoordinator).run(
-      async () => {
-        const result = options.signature
-          ? await model.run(options.signature, inputs)
-          : await model.run(inputs)
-        return (Array.isArray(result) ? result : result) as LiteRtModelOutput
-      },
-      options.signal ?? this.options.signal,
-      `litert-preflight:${path}`,
-    )
-    const inferenceDurationMs = performance.now() - startedAt
-    const result: LiteRtPreflightResult = {
-      ...info,
-      inputDetails,
-      outputDetails,
-      outputCount: outputCount(output),
-      inferenceDurationMs,
-    }
-    this.record({
-      ...info,
-      event: 'preflight',
-      timestamp: new Date().toISOString(),
-      inferenceDurationMs,
-      inputCount: inputCount(inputs),
-      outputCount: result.outputCount,
-    })
-    return result
-  }
-
-  getModelInfo(path: string, options: LiteRtModelOptions = {}): LiteRtModelInfo | undefined {
-    const entry = this.models.get(this.requestKey(path, options))
-      ?? [...this.models.values()].find((candidate) => candidate.modelPath === path)
-    if (!entry) return undefined
-    const { model: _model, ...info } = entry
-    return info
-  }
-
-  getTelemetry(): readonly LiteRtTelemetryRecord[] {
-    return [...this.telemetry]
-  }
-
-  clearTelemetry(): void {
-    this.telemetry.length = 0
-  }
-
-  createTensor(data: Float32Array | Int32Array | Uint8Array, shape: number[]): Tensor {
-    return Tensor.fromTypedArray(data, shape)
-  }
-
-  readTensor<T extends Float32Array | Int32Array | Uint8Array>(tensor: Tensor): T {
-    return tensor.toTypedArray() as T
-  }
-
-  supportsGpuBufferTensors(): boolean {
-    return typeof (Tensor as unknown as { fromGpuBuffer?: unknown }).fromGpuBuffer === 'function'
-  }
-
-  disposeModel(path: string): void {
-    for (const [key, entry] of this.models.entries()) {
-      if (entry.modelPath === path) this.models.delete(key)
-    }
-  }
-
-  dispose(): void {
-    this.models.clear()
-    this.telemetry.length = 0
-    this.webGpuDevicePromise = null
-  }
-
   private async run(
     path: string,
     input: LiteRtModelInput,
     signature: string | undefined,
-    options: LiteRtModelOptions & { signal?: AbortSignal; label?: string },
+    options: LiteRtModelOptions & { label?: string },
   ): Promise<LiteRtModelOutput> {
+    this.assertUsable()
+    const signal = options.signal ?? this.options.signal
     const model = await this.loadModel(path, options)
     const info = this.requireModelInfo(path, options)
-    const startedAt = performance.now()
-    const result = await (this.options.coordinator ?? defaultCoordinator).run(
-      async () => {
-        const output = signature ? await model.run(signature, input) : await model.run(input)
-        return (Array.isArray(output) ? output : output) as LiteRtModelOutput
-      },
-      options.signal ?? this.options.signal,
-      options.label ?? `litert:${path}`,
-    )
-    const inferenceDurationMs = performance.now() - startedAt
-    this.record({
-      ...info,
-      event: 'inference',
-      timestamp: new Date().toISOString(),
-      inferenceDurationMs,
-      inputCount: inputCount(input),
-      outputCount: outputCount(result),
-    })
-    return result
+    let inferenceStartedAt = 0
+    try {
+      const result = await (this.options.coordinator ?? defaultCoordinator).run(
+        async () => {
+          inferenceStartedAt = performance.now()
+          const output = signature ? await model.run(signature, input) : await model.run(input)
+          return (Array.isArray(output) ? output : output) as LiteRtModelOutput
+        },
+        signal,
+        options.label ?? `litert:${path}`,
+      )
+      const inferenceDurationMs = performance.now() - inferenceStartedAt
+      this.record({
+        ...info,
+        event: 'inference',
+        timestamp: new Date().toISOString(),
+        inferenceDurationMs,
+        inputCount: inputCount(input),
+        outputCount: outputCount(result),
+        tensorCopyCount: this.tensorCopyCount,
+      })
+      return result
+    } catch (cause) {
+      if (cause instanceof InferenceError) throw cause
+      if (isAbort(cause, signal)) {
+        throw new InferenceError('CANCELLED', `Inference cancelled for ${path}`, { stage: 'inference', cause })
+      }
+      throw new InferenceError('INFERENCE_FAILED', `Inference failed for ${path}`, { stage: 'inference', cause })
+    }
   }
 
   private requireModelInfo(path: string, options: LiteRtModelOptions): LiteRtModelInfo {
@@ -301,10 +387,14 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
     ].join('::')
   }
 
-  private async resolve(path: string): Promise<ArrayBuffer> {
+  private async resolve(path: string, signal?: AbortSignal): Promise<ArrayBuffer> {
+    const effectiveSignal = signal ?? this.options.signal
     try {
-      return await this.options.assets.resolve({ id: path, path }, { signal: this.options.signal })
+      return await this.options.assets.resolve({ id: path, path }, { signal: effectiveSignal })
     } catch (cause) {
+      if (isAbort(cause, effectiveSignal)) {
+        throw new InferenceError('CANCELLED', `Asset fetch cancelled for ${path}`, { asset: path, cause })
+      }
       throw new InferenceError('ASSET_FETCH_FAILED', `Failed to resolve ${path}`, { asset: path, cause })
     }
   }
@@ -337,7 +427,13 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
 
   private record(record: LiteRtTelemetryRecord): void {
     this.telemetry.push(record)
+    const limit = Math.max(1, this.options.telemetryLimit ?? DEFAULT_TELEMETRY_LIMIT)
+    if (this.telemetry.length > limit) this.telemetry.splice(0, this.telemetry.length - limit)
     this.options.onTelemetry?.(record)
+  }
+
+  private assertUsable(): void {
+    if (this.disposed) throw new InferenceError('INFERENCE_FAILED', 'LiteRT runtime has been disposed')
   }
 }
 
