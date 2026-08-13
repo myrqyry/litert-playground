@@ -384,6 +384,25 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(jiti@2.7.0))
 
+  packages/image-embedding:
+    dependencies:
+      '@litertjs/core':
+        specifier: ^2.5.3
+        version: 2.5.3
+    devDependencies:
+      '@litert-playground/inference-core':
+        specifier: workspace:*
+        version: link:../inference-core
+      '@litert-playground/runtime-litert':
+        specifier: workspace:*
+        version: link:../runtime-litert
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(jiti@2.7.0))
+
   packages/inference-core:
     devDependencies:
       typescript:
@@ -472,6 +491,25 @@ importers:
       '@litert-playground/inference-core':
         specifier: workspace:*
         version: link:../inference-core
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(jiti@2.7.0))
+
+  packages/video-classification:
+    dependencies:
+      '@litertjs/core':
+        specifier: ^2.5.3
+        version: 2.5.3
+    devDependencies:
+      '@litert-playground/inference-core':
+        specifier: workspace:*
+        version: link:../inference-core
+      '@litert-playground/runtime-litert':
+        specifier: workspace:*
+        version: link:../runtime-litert
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
