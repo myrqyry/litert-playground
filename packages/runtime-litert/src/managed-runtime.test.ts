@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadAndCompile, loadLiteRt, setWebGpuDevice } from '@litertjs/core'
+import { loadAndCompile, loadLiteRt, setWebGpuDevice, Tensor } from '@litertjs/core'
 import { createLiteRtRuntime } from './context'
 
 vi.mock('@litertjs/core', async () => {
@@ -59,6 +59,66 @@ describe('managed LiteRT runtime', () => {
     expect(loadAndCompile).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps a shared load alive when one deduplicated caller aborts', async () => {
+    let releaseCompile!: (model: unknown) => void
+    const compileGate = new Promise((resolve) => { releaseCompile = resolve })
+    vi.mocked(loadAndCompile).mockReturnValue(compileGate as never)
+    const context = await createLiteRtRuntime({
+      backend: 'wasm',
+      assets: { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(8)) },
+    })
+    const firstController = new AbortController()
+    const secondController = new AbortController()
+
+    const first = context.liteRt.loadModel('shared.tflite', { signal: firstController.signal })
+    const second = context.liteRt.loadModel('shared.tflite', { signal: secondController.signal })
+    await vi.waitFor(() => expect(loadAndCompile).toHaveBeenCalledTimes(1))
+
+    firstController.abort()
+    await expect(first).rejects.toMatchObject({ code: 'CANCELLED' })
+
+    const model = {}
+    releaseCompile(model)
+    await expect(second).resolves.toBe(model)
+    expect(loadAndCompile).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not let a disposed pending load repopulate the cache', async () => {
+    let releaseFirst!: (model: unknown) => void
+    let releaseSecond!: (model: unknown) => void
+    const firstGate = new Promise((resolve) => { releaseFirst = resolve })
+    const secondGate = new Promise((resolve) => { releaseSecond = resolve })
+    vi.mocked(loadAndCompile)
+      .mockReturnValueOnce(firstGate as never)
+      .mockReturnValueOnce(secondGate as never)
+
+    const context = await createLiteRtRuntime({
+      backend: 'wasm',
+      assets: { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(8)) },
+    })
+
+    const first = context.liteRt.loadModel('replaceable.tflite')
+    await vi.waitFor(() => expect(loadAndCompile).toHaveBeenCalledTimes(1))
+
+    context.liteRt.disposeModel('replaceable.tflite')
+    await expect(first).rejects.toMatchObject({ code: 'CANCELLED' })
+
+    const second = context.liteRt.loadModel('replaceable.tflite')
+    await vi.waitFor(() => expect(loadAndCompile).toHaveBeenCalledTimes(2))
+
+    const staleModel = { delete: vi.fn() }
+    releaseFirst(staleModel)
+    await vi.waitFor(() => expect(staleModel.delete).toHaveBeenCalledTimes(1))
+    expect(context.liteRt.getModelInfo('replaceable.tflite')).toBeUndefined()
+
+    const freshModel = {}
+    releaseSecond(freshModel)
+    await expect(second).resolves.toBe(freshModel)
+    expect(context.liteRt.getModelInfo('replaceable.tflite')).toMatchObject({
+      modelPath: 'replaceable.tflite',
+    })
+  })
+
   it('uses WebNN before WASM when WebGPU compilation fails in auto mode', async () => {
     const device = {}
     vi.stubGlobal('navigator', {
@@ -108,6 +168,54 @@ describe('managed LiteRT runtime', () => {
     expect(context.liteRt.getTelemetry().map((entry) => entry.event)).toEqual(['compile', 'preflight'])
   })
 
+  it('releases internally generated preflight inputs and discarded outputs', async () => {
+    const input = { delete: vi.fn() } as unknown as Tensor
+    const output = { delete: vi.fn() } as unknown as Tensor
+    const tensorSpy = vi.spyOn(Tensor, 'fromTypedArray').mockReturnValue(input)
+    const model = {
+      getInputDetails: vi.fn().mockReturnValue([{ shape: [1, 4], dtype: 'float32' }]),
+      getOutputDetails: vi.fn().mockReturnValue([{ shape: [1, 2], dtype: 'float32' }]),
+      run: vi.fn().mockResolvedValue([output]),
+    }
+    vi.mocked(loadAndCompile).mockResolvedValue(model as never)
+    const context = await createLiteRtRuntime({
+      backend: 'wasm',
+      assets: { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(8)) },
+    })
+
+    try {
+      await context.liteRt.preflight('cleanup.tflite')
+      expect(input.delete).toHaveBeenCalledTimes(1)
+      expect(output.delete).toHaveBeenCalledTimes(1)
+    } finally {
+      tensorSpy.mockRestore()
+    }
+  })
+
+  it('releases internally generated preflight inputs when inference fails', async () => {
+    const input = { delete: vi.fn() } as unknown as Tensor
+    const tensorSpy = vi.spyOn(Tensor, 'fromTypedArray').mockReturnValue(input)
+    const model = {
+      getInputDetails: vi.fn().mockReturnValue([{ shape: [1, 4], dtype: 'float32' }]),
+      getOutputDetails: vi.fn().mockReturnValue([]),
+      run: vi.fn().mockRejectedValue(new Error('preflight failed')),
+    }
+    vi.mocked(loadAndCompile).mockResolvedValue(model as never)
+    const context = await createLiteRtRuntime({
+      backend: 'wasm',
+      assets: { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(8)) },
+    })
+
+    try {
+      await expect(context.liteRt.preflight('cleanup-failure.tflite')).rejects.toMatchObject({
+        code: 'INFERENCE_FAILED',
+      })
+      expect(input.delete).toHaveBeenCalledTimes(1)
+    } finally {
+      tensorSpy.mockRestore()
+    }
+  })
+
   it('supports named-signature prediction and inference telemetry', async () => {
     const result = [{}] as never
     const model = { run: vi.fn().mockResolvedValue(result) }
@@ -128,6 +236,26 @@ describe('managed LiteRT runtime', () => {
       resolvedBackend: 'wasm',
       outputCount: 1,
     })
+  })
+
+  it('does not let telemetry callback failures change runtime results', async () => {
+    const model = { run: vi.fn().mockResolvedValue([{}]) }
+    vi.mocked(loadAndCompile).mockResolvedValue(model as never)
+    const onTelemetry = vi.fn(() => {
+      throw new Error('observer failed')
+    })
+    const context = await createLiteRtRuntime({
+      backend: 'wasm',
+      assets: { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(8)) },
+      onTelemetry,
+    })
+
+    await expect(context.liteRt.loadModel('telemetry.tflite')).resolves.toBe(model)
+    await expect(context.liteRt.predict('telemetry.tflite', {} as never)).resolves.toHaveLength(1)
+
+    expect(loadAndCompile).toHaveBeenCalledTimes(1)
+    expect(onTelemetry).toHaveBeenCalledTimes(2)
+    expect(context.liteRt.getTelemetry().map((entry) => entry.event)).toEqual(['compile', 'inference'])
   })
 
   it('bounds telemetry history for long-running consumers', async () => {
