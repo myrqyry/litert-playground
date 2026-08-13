@@ -1,5 +1,5 @@
 export { TransformersTextPipeline } from './transformers-pipeline'
-export { LiteRtLmTextPipeline } from './litertlm-pipeline'
+export { LiteRtLmTextPipeline, resolveTextGenerationManifest } from './litertlm-pipeline'
 export {
   litertLmManifest,
   transformersTextManifest,
@@ -11,6 +11,13 @@ export {
   gemma4E4bManifest,
   selectTextGenerationManifest,
 } from './manifest'
+export { LiteRtLmWorkerClient } from './worker/client'
+export type {
+  LiteRtLmWorkerRequest,
+  LiteRtLmWorkerResponse,
+  LiteRtLmWorkerMessage,
+  LiteRtLmWorkerGenerationConfig,
+} from './worker/protocol'
 export type {
   TextGenerationInput,
   TextGenerationConfig,

@@ -6,12 +6,26 @@ import {
   type RuntimeContext,
   type TextInferenceResult,
 } from '@litert-playground/inference-core';
+import type {
+  ConversationConfig,
+  SamplerParameters,
+  SessionConfig,
+} from '@litert-lm/core';
 import {
   type TextGenerationConfig,
   type TextGenerationInput,
   type TextMessage,
+  TEXT_GENERATION_DEFAULTS,
 } from './types';
-import { litertLmManifest } from './manifest';
+import {
+  litertLmManifest,
+  lfm2_5InstructManifest,
+  lfm2_5InstructInt8Manifest,
+  lfm2_5ThinkingManifest,
+  lfm2_5ThinkingInt8Manifest,
+  gemma4E2bManifest,
+  gemma4E4bManifest,
+} from './manifest';
 
 interface LiteRtLmModule {
   Engine: {
@@ -24,7 +38,7 @@ interface LiteRtLmModule {
 }
 
 interface LiteRtLmEngine {
-  createConversation(config?: { maxContextTokens?: number }): Promise<LiteRtLmConversation>;
+  createConversation(config?: ConversationConfig): Promise<LiteRtLmConversation>;
   delete(): Promise<void>;
 }
 
@@ -34,23 +48,51 @@ interface LiteRtLmConversation {
   ): Promise<{ text?: string }>;
   sendMessageStreaming(
     message: { role: string; content: string } | Array<{ role: string; content: string }>,
-  ): ReadableStream<{ text?: string }>;
+  ): ReadableStream<StreamChunk>;
   cancel(): void;
   delete(): Promise<void>;
 }
 
-export interface LiteRtLmTextConfig extends TextGenerationConfig {
-  model: string | Blob | ReadableStream<Uint8Array>;
-  maxContextTokens?: number;
+interface StreamChunk {
+  text?: string;
+  content?: string | Array<{ type?: string; text?: string }>;
+  channels?: Record<string, string>;
 }
 
-const DEFAULTS: Pick<LiteRtLmTextConfig, 'model' | 'maxContextTokens'> = {
+export interface LiteRtLmTextConfig extends TextGenerationConfig {
+  model?: string | Blob | ReadableStream<Uint8Array>;
+  maxContextTokens?: number;
+  maxOutputTokens?: number;
+  seed?: number;
+  history?: TextMessage[];
+  onToken?: (text: string) => void;
+  onReasoning?: (text: string) => void;
+}
+
+const DEFAULTS: Pick<LiteRtLmTextConfig, 'model' | 'maxContextTokens' | 'maxOutputTokens'> = {
   model: 'litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B.litertlm',
   maxContextTokens: 4096,
-};function toLiteRtMessages(input: TextGenerationInput): Array<{ role: string; content: string }> {
+  maxOutputTokens: TEXT_GENERATION_DEFAULTS.maxTokens,
+};
+
+const KNOWN_MANIFESTS: ModelManifest[] = [
+  litertLmManifest,
+  lfm2_5InstructManifest,
+  lfm2_5InstructInt8Manifest,
+  lfm2_5ThinkingManifest,
+  lfm2_5ThinkingInt8Manifest,
+  gemma4E2bManifest,
+  gemma4E4bManifest,
+];
+
+export function resolveTextGenerationManifest(modelId: string): ModelManifest | undefined {
+  return KNOWN_MANIFESTS.find((manifest) => manifest.modelId === modelId);
+}
+
+function toLiteRtMessages(input: TextGenerationInput, history: TextMessage[] = []): Array<{ role: string; content: string }> {
   const messages: Array<{ role: string; content: string }> = [];
-  if (input.systemPrompt) {
-    messages.push({ role: 'system', content: input.systemPrompt });
+  for (const msg of history) {
+    messages.push({ role: msg.role === 'model' ? 'assistant' : msg.role, content: msg.content });
   }
   for (const msg of input.messages) {
     const role = msg.role === 'model' ? 'assistant' : msg.role;
@@ -59,25 +101,79 @@ const DEFAULTS: Pick<LiteRtLmTextConfig, 'model' | 'maxContextTokens'> = {
   return messages;
 }
 
+function extractText(message: StreamChunk): string {
+  if (typeof message.text === 'string') return message.text;
+  if (typeof message.content === 'string') return message.content;
+  if (Array.isArray(message.content)) {
+    return message.content
+      .filter((part) => part.type === 'text' && typeof part.text === 'string')
+      .map((part) => part.text)
+      .join('');
+  }
+  return '';
+}
+
+function extractReasoning(message: StreamChunk): string {
+  return message.channels?.reasoning ?? message.channels?.thought ?? message.channels?.think ?? '';
+}
+
+function buildConversationConfig(input: TextGenerationInput, config: LiteRtLmTextConfig): ConversationConfig | undefined {
+  const conversationConfig: ConversationConfig = {};
+  const hasSampler =
+    config.temperature !== undefined ||
+    config.topK !== undefined ||
+    config.topP !== undefined ||
+    config.seed !== undefined;
+  if (hasSampler || config.maxOutputTokens !== undefined || config.maxTokens !== undefined) {
+    const sessionConfig: SessionConfig = {};
+    if (hasSampler) {
+      const samplerParams: SamplerParameters = {};
+      if (config.temperature !== undefined) samplerParams.temperature = config.temperature;
+      if (config.topK !== undefined) samplerParams.k = config.topK;
+      if (config.topP !== undefined) samplerParams.p = config.topP;
+      if (config.seed !== undefined) samplerParams.seed = config.seed;
+      sessionConfig.samplerParams = samplerParams;
+    }
+    sessionConfig.maxOutputTokens = config.maxOutputTokens ?? config.maxTokens;
+    conversationConfig.sessionConfig = sessionConfig;
+  }
+  if (input.systemPrompt?.trim()) {
+    conversationConfig.preface = { messages: [{ role: 'system', content: input.systemPrompt }] };
+  }
+  return Object.keys(conversationConfig).length > 0 ? conversationConfig : undefined;
+}
+
 async function readStream(
-  stream: ReadableStream<{ text?: string }>,
-  signal?: AbortSignal,
-): Promise<string> {
+  stream: ReadableStream<StreamChunk>,
+  signal: AbortSignal | undefined,
+  onToken: ((text: string) => void) | undefined,
+  onReasoning: ((text: string) => void) | undefined,
+): Promise<{ text: string; reasoning?: string }> {
   const reader = stream.getReader();
-  const decoder = new TextDecoder();
   let full = '';
+  let reasoning = '';
   try {
     while (true) {
       if (signal?.aborted) throw new Error('CANCELLED');
       const { done, value } = await reader.read();
       if (done) break;
-      if (value?.text) full += value.text;
+      if (value) {
+        const text = extractText(value);
+        if (text) {
+          full += text;
+          onToken?.(text);
+        }
+        const reason = extractReasoning(value);
+        if (reason) {
+          reasoning += reason;
+          onReasoning?.(reason);
+        }
+      }
     }
   } finally {
     reader.releaseLock();
   }
-  void decoder;
-  return full;
+  return { text: full, ...(reasoning ? { reasoning } : {}) };
 }
 
 export class LiteRtLmTextPipeline
@@ -92,8 +188,15 @@ export class LiteRtLmTextPipeline
   private conversation: LiteRtLmConversation | null = null;
   private loadMs = 0;
 
-  constructor(manifest: ModelManifest = litertLmManifest) {
-    this.manifest = manifest;
+  constructor(manifestOrModelId: ModelManifest | string = litertLmManifest) {
+    this.manifest =
+      typeof manifestOrModelId === 'string'
+        ? resolveTextGenerationManifest(manifestOrModelId) ?? {
+            ...litertLmManifest,
+            modelId: manifestOrModelId,
+            name: manifestOrModelId,
+          }
+        : manifestOrModelId;
   }
 
   async load(context: RuntimeContext): Promise<void> {
@@ -134,23 +237,24 @@ export class LiteRtLmTextPipeline
     const cfg = { ...DEFAULTS, ...config };
     try {
       if (signal?.aborted) throw new Error('CANCELLED');
-      const messages = toLiteRtMessages(input);
-      this.conversation = await this.engine.createConversation({
-        maxContextTokens: cfg.maxContextTokens,
-      });
+      const messages = toLiteRtMessages(input, cfg.history);
+      this.conversation = await this.engine.createConversation(buildConversationConfig(input, cfg));
       const prompt = messages.pop()!;
       for (const msg of messages) {
         if (signal?.aborted) throw new Error('CANCELLED');
         await this.conversation.sendMessage(msg);
       }
+      if (signal?.aborted) throw new Error('CANCELLED');
       const stream = this.conversation.sendMessageStreaming(prompt);
-      const text = await readStream(stream, signal);
+      const { text, reasoning } = await readStream(stream, signal, cfg.onToken, cfg.onReasoning);
       this.status = 'ready';
       return {
         kind: 'text',
         text,
+        ...(reasoning ? { reasoning } : {}),
       } satisfies TextInferenceResult;
     } catch (e) {
+      this.conversation?.cancel();
       this.status = 'ready';
       throw e instanceof Error ? e : new Error(String(e));
     }

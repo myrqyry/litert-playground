@@ -63,6 +63,27 @@ describe('workspace package boundaries', () => {
     expect(entrypoint).toContain('KokoroConfig')
   })
 
+  it('keeps text-gen externally consumable through the shared core contract', async () => {
+    const manifest = JSON.parse(await text('packages/text-gen/package.json')) as {
+      dependencies?: Record<string, string>
+      peerDependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+    const pipeline = await text('packages/text-gen/src/litertlm-pipeline.ts')
+    const entrypoint = await text('packages/text-gen/src/index.ts')
+
+    expect(manifest.dependencies).toMatchObject({ '@litert-lm/core': '^0.15.0' })
+    expect(manifest.dependencies?.['@litert-playground/inference-core']).toBeUndefined()
+    expect(manifest.peerDependencies).toMatchObject({ '@litert-playground/inference-core': '0.1.x' })
+    expect(manifest.devDependencies).toMatchObject({ '@litert-playground/inference-core': 'workspace:*' })
+    expect(pipeline).toMatch(/from ['"]@litert-playground\/inference-core['"]/)
+    expect(entrypoint).toContain('LiteRtLmTextPipeline')
+    expect(entrypoint).toContain('litertLmManifest')
+    expect(entrypoint).toContain('selectTextGenerationManifest')
+    expect(entrypoint).toContain('LiteRtLmWorkerClient')
+    expect(entrypoint).toContain('LiteRtLmTextConfig')
+  })
+
   it('keeps runtime and Qwen packages externally consumable through peer contracts', async () => {
     const runtime = JSON.parse(await text('packages/runtime-litert/package.json')) as {
       dependencies?: Record<string, string>

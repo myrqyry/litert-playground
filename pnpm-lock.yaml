@@ -468,10 +468,10 @@ importers:
       '@litert-lm/core':
         specifier: ^0.15.0
         version: 0.15.0
+    devDependencies:
       '@litert-playground/inference-core':
         specifier: workspace:*
         version: link:../inference-core
-    devDependencies:
       typescript:
         specifier: ^7.0.2
         version: 7.0.2

@@ -11,12 +11,15 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
+  "peerDependencies": {
+    "@litert-playground/inference-core": "0.1.x"
+  },
   "dependencies": {
     "@litert-lm/core": "^0.15.0",
-    "@litert-playground/inference-core": "workspace:*",
     "@huggingface/transformers": "^3.8.1"
   },
   "devDependencies": {
+    "@litert-playground/inference-core": "workspace:*",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }
