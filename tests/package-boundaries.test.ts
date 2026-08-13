@@ -112,4 +112,58 @@ describe('workspace package boundaries', () => {
     })
     expect(qwen.dependencies?.['@litertjs/core']).toBe('^2.5.3')
   })
+
+  it('keeps video-classification externally consumable through the shared core contract', async () => {
+    const manifest = JSON.parse(await text('packages/video-classification/package.json')) as {
+      dependencies?: Record<string, string>
+      peerDependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+    const pipeline = await text('packages/video-classification/src/pipeline.ts')
+    const entrypoint = await text('packages/video-classification/src/index.ts')
+
+    expect(manifest.dependencies?.['@litertjs/core']).toBe('^2.5.3')
+    expect(manifest.dependencies?.['@litert-playground/inference-core']).toBeUndefined()
+    expect(manifest.dependencies?.['@litert-playground/runtime-litert']).toBeUndefined()
+    expect(manifest.peerDependencies).toMatchObject({
+      '@litert-playground/inference-core': '0.1.x',
+      '@litert-playground/runtime-litert': '0.1.x',
+    })
+    expect(manifest.devDependencies).toMatchObject({
+      '@litert-playground/inference-core': 'workspace:*',
+      '@litert-playground/runtime-litert': 'workspace:*',
+    })
+    expect(pipeline).toMatch(/from ['"]@litert-playground\/inference-core['"]/)
+    expect(entrypoint).toContain('MoViNetPipeline')
+    expect(entrypoint).toContain('moViNetManifest')
+    expect(entrypoint).toContain('MoViNetInput')
+    expect(entrypoint).toContain('MoViNetConfig')
+  })
+
+  it('keeps image-embedding externally consumable through the shared core contract', async () => {
+    const manifest = JSON.parse(await text('packages/image-embedding/package.json')) as {
+      dependencies?: Record<string, string>
+      peerDependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+    const pipeline = await text('packages/image-embedding/src/pipeline.ts')
+    const entrypoint = await text('packages/image-embedding/src/index.ts')
+
+    expect(manifest.dependencies?.['@litertjs/core']).toBe('^2.5.3')
+    expect(manifest.dependencies?.['@litert-playground/inference-core']).toBeUndefined()
+    expect(manifest.dependencies?.['@litert-playground/runtime-litert']).toBeUndefined()
+    expect(manifest.peerDependencies).toMatchObject({
+      '@litert-playground/inference-core': '0.1.x',
+      '@litert-playground/runtime-litert': '0.1.x',
+    })
+    expect(manifest.devDependencies).toMatchObject({
+      '@litert-playground/inference-core': 'workspace:*',
+      '@litert-playground/runtime-litert': 'workspace:*',
+    })
+    expect(pipeline).toMatch(/from ['"]@litert-playground\/inference-core['"]/)
+    expect(entrypoint).toContain('ClipImageEmbeddingPipeline')
+    expect(entrypoint).toContain('clipImageEmbeddingManifest')
+    expect(entrypoint).toContain('ClipImageInput')
+    expect(entrypoint).toContain('ClipImageConfig')
+  })
 })
