@@ -33,6 +33,17 @@ interface LoadedModel extends LiteRtModelInfo {
   model: CompiledModel
 }
 
+interface PendingLoad {
+  key: string
+  path: string
+  generation: number
+  controller: AbortController
+  promise: Promise<LoadedModel>
+  subscribers: number
+  settled: boolean
+  detachRuntimeAbort?: () => void
+}
+
 const DEFAULT_TELEMETRY_LIMIT = 512
 
 function runtimeBase(assetBase?: string): string {
@@ -96,9 +107,36 @@ function zeroTensor(details: TensorDetails, maxElements: number): Tensor {
   }
 }
 
+function safeDeleteTensor(tensor: Tensor): void {
+  try {
+    tensor.delete()
+  } catch {
+    // Cleanup must never turn an otherwise successful operation into a failure.
+  }
+}
+
+function disposeTensors(value: LiteRtModelInput | LiteRtModelOutput): void {
+  const tensors = Array.isArray(value)
+    ? value
+    : value instanceof Tensor
+      ? [value]
+      : Object.values(value)
+
+  for (const tensor of new Set(tensors)) safeDeleteTensor(tensor)
+}
+
+function safeDeleteModel(model: CompiledModel): void {
+  try {
+    ;(model as CompiledModel & { delete?: () => void }).delete?.()
+  } catch {
+    // Some LiteRT.js model wrappers do not expose an explicit delete hook.
+  }
+}
+
 class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
   private readonly models = new Map<string, LoadedModel>()
-  private readonly pendingLoads = new Map<string, Promise<LoadedModel>>()
+  private readonly pendingLoads = new Map<string, PendingLoad>()
+  private readonly modelGenerations = new Map<string, number>()
   private readonly telemetry: LiteRtTelemetryRecord[] = []
   private resolvedBackend: Backend
   private webGpuDevice: Promise<unknown> | null = null
@@ -123,16 +161,9 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
     const cached = this.models.get(key)
     if (cached) return cached.model
 
-    const pending = this.pendingLoads.get(key)
-    if (pending) return (await pending).model
-
-    const promise = this.compile(path, options, key)
-    this.pendingLoads.set(key, promise)
-    try {
-      return (await promise).model
-    } finally {
-      this.pendingLoads.delete(key)
-    }
+    const signal = options.signal ?? this.options.signal
+    const pending = this.pendingLoads.get(key) ?? this.startPendingLoad(path, options, key)
+    return this.awaitPendingLoad(pending, signal)
   }
 
   async loadNpy(path: string, signal?: AbortSignal): Promise<Float32Array> {
@@ -169,12 +200,14 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
     const info = this.requireInfo(path, options)
     const inputDetails = model.getInputDetails()
     const outputDetails = model.getOutputDetails()
+    const ownsInputs = options.createInputs === undefined
     const inputs = options.createInputs?.(inputDetails)
       ?? inputDetails.map((details) => zeroTensor(details, options.maxTensorElements ?? 10_000_000))
 
+    let output: LiteRtModelOutput | undefined
     let startedAt = 0
     try {
-      const output = await (this.options.coordinator ?? defaultCoordinator).run(async () => {
+      output = await (this.options.coordinator ?? defaultCoordinator).run(async () => {
         startedAt = performance.now()
         return (options.signature
           ? await model.run(options.signature, inputs)
@@ -205,6 +238,9 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
         throw new InferenceError('CANCELLED', `Preflight cancelled for ${path}`, { stage: 'preflight', cause })
       }
       throw new InferenceError('INFERENCE_FAILED', `Preflight failed for ${path}`, { stage: 'preflight', cause })
+    } finally {
+      if (ownsInputs) disposeTensors(inputs)
+      if (output) disposeTensors(output)
     }
   }
 
@@ -241,25 +277,127 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
   }
 
   disposeModel(path: string): void {
+    this.bumpGeneration(path)
+
     for (const [key, entry] of this.models) {
-      if (entry.modelPath === path) this.models.delete(key)
+      if (entry.modelPath !== path) continue
+      safeDeleteModel(entry.model)
+      this.models.delete(key)
     }
-    for (const key of this.pendingLoads.keys()) {
-      if (key.startsWith(`${path}::`)) this.pendingLoads.delete(key)
+
+    for (const [key, pending] of this.pendingLoads) {
+      if (pending.path !== path) continue
+      this.pendingLoads.delete(key)
+      pending.controller.abort()
     }
   }
 
   dispose(): void {
+    if (this.disposed) return
     this.disposed = true
+
+    for (const entry of this.models.values()) safeDeleteModel(entry.model)
+    for (const pending of this.pendingLoads.values()) pending.controller.abort()
+
     this.models.clear()
     this.pendingLoads.clear()
+    this.modelGenerations.clear()
     this.telemetry.length = 0
     this.webGpuDevice = null
     this.tensorCopies = 0
   }
 
-  private async compile(path: string, options: LiteRtModelOptions, key: string): Promise<LoadedModel> {
-    const signal = options.signal ?? this.options.signal
+  private startPendingLoad(path: string, options: LiteRtModelOptions, key: string): PendingLoad {
+    const controller = new AbortController()
+    const runtimeSignal = this.options.signal
+    let detachRuntimeAbort: (() => void) | undefined
+
+    if (runtimeSignal) {
+      if (runtimeSignal.aborted) {
+        controller.abort()
+      } else {
+        const onAbort = () => controller.abort()
+        runtimeSignal.addEventListener('abort', onAbort, { once: true })
+        detachRuntimeAbort = () => runtimeSignal.removeEventListener('abort', onAbort)
+      }
+    }
+
+    const generation = this.currentGeneration(path)
+    let pending!: PendingLoad
+    const promise = this.compile(path, { ...options, signal: controller.signal }, key, generation)
+      .finally(() => {
+        pending.settled = true
+        pending.detachRuntimeAbort?.()
+        if (this.pendingLoads.get(key) === pending) this.pendingLoads.delete(key)
+      })
+
+    pending = {
+      key,
+      path,
+      generation,
+      controller,
+      promise,
+      subscribers: 0,
+      settled: false,
+      detachRuntimeAbort,
+    }
+    this.pendingLoads.set(key, pending)
+    return pending
+  }
+
+  private async awaitPendingLoad(pending: PendingLoad, signal?: AbortSignal): Promise<CompiledModel> {
+    if (signal?.aborted || pending.controller.signal.aborted) {
+      throw this.cancelledLoad(pending.path)
+    }
+
+    pending.subscribers += 1
+    try {
+      const entry = await new Promise<LoadedModel>((resolve, reject) => {
+        let finished = false
+        const signals = [...new Set(
+          [signal, pending.controller.signal].filter((candidate): candidate is AbortSignal => candidate !== undefined),
+        )]
+
+        const cleanup = () => {
+          for (const candidate of signals) candidate.removeEventListener('abort', onAbort)
+        }
+        const finish = (callback: () => void) => {
+          if (finished) return
+          finished = true
+          cleanup()
+          callback()
+        }
+        const onAbort = () => finish(() => reject(this.cancelledLoad(pending.path)))
+
+        for (const candidate of signals) candidate.addEventListener('abort', onAbort, { once: true })
+        pending.promise.then(
+          (value) => finish(() => resolve(value)),
+          (cause) => finish(() => reject(cause)),
+        )
+
+        if (signals.some((candidate) => candidate.aborted)) onAbort()
+      })
+      return entry.model
+    } finally {
+      pending.subscribers -= 1
+      if (
+        pending.subscribers === 0
+        && !pending.settled
+        && this.pendingLoads.get(pending.key) === pending
+      ) {
+        this.pendingLoads.delete(pending.key)
+        pending.controller.abort()
+      }
+    }
+  }
+
+  private async compile(
+    path: string,
+    options: LiteRtModelOptions,
+    key: string,
+    generation: number,
+  ): Promise<LoadedModel> {
+    const signal = options.signal
     const requestedBackend = options.accelerator ?? this.options.backend ?? 'auto'
     const supported = options.supportedBackends ?? this.options.supportedBackends ?? {}
     const candidates = rankBackends(this.capabilities, supported, requestedBackend)
@@ -275,8 +413,8 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
 
     for (let index = 0; index < candidates.length; index += 1) {
       const backend = candidates[index]
-      if (signal?.aborted) {
-        throw new InferenceError('CANCELLED', `Model load cancelled for ${path}`, { stage: 'compile', asset: path })
+      if (signal?.aborted || !this.isGenerationCurrent(path, generation)) {
+        throw this.cancelledLoad(path)
       }
 
       const compileStartedAt = performance.now()
@@ -286,9 +424,14 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
           new Uint8Array(bytes),
           this.compileOptions(backend, options.webNNOptions ?? this.options.webNNOptions),
         )
-        this.assertUsable()
-        if (signal?.aborted) {
-          throw new InferenceError('CANCELLED', `Model load cancelled for ${path}`, { stage: 'compile', asset: path })
+
+        if (this.disposed) {
+          safeDeleteModel(model)
+          this.assertUsable()
+        }
+        if (signal?.aborted || !this.isGenerationCurrent(path, generation)) {
+          safeDeleteModel(model)
+          throw this.cancelledLoad(path)
         }
 
         const entry: LoadedModel = {
@@ -313,6 +456,7 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
         lastError = cause
         if (backend === 'webgpu') this.webGpuDevice = null
         if (cause instanceof InferenceError && cause.message.includes('disposed')) throw cause
+        if (cause instanceof InferenceError && cause.code === 'CANCELLED') throw cause
         if (isAbort(cause, signal)) {
           throw new InferenceError('CANCELLED', `Model load cancelled for ${path}`, {
             stage: 'compile',
@@ -384,6 +528,25 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
     ].join('::')
   }
 
+  private currentGeneration(path: string): number {
+    return this.modelGenerations.get(path) ?? 0
+  }
+
+  private isGenerationCurrent(path: string, generation: number): boolean {
+    return this.currentGeneration(path) === generation
+  }
+
+  private bumpGeneration(path: string): void {
+    this.modelGenerations.set(path, this.currentGeneration(path) + 1)
+  }
+
+  private cancelledLoad(path: string): InferenceError {
+    return new InferenceError('CANCELLED', `Model load cancelled for ${path}`, {
+      stage: 'compile',
+      asset: path,
+    })
+  }
+
   private async resolve(path: string, signal?: AbortSignal): Promise<ArrayBuffer> {
     const effectiveSignal = signal ?? this.options.signal
     try {
@@ -426,7 +589,12 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
     this.telemetry.push(record)
     const limit = Math.max(1, this.options.telemetryLimit ?? DEFAULT_TELEMETRY_LIMIT)
     if (this.telemetry.length > limit) this.telemetry.splice(0, this.telemetry.length - limit)
-    this.options.onTelemetry?.(record)
+
+    try {
+      this.options.onTelemetry?.(record)
+    } catch {
+      // Telemetry is observational and must never change runtime success/failure.
+    }
   }
 
   private assertUsable(): void {
