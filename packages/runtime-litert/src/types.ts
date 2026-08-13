@@ -16,6 +16,7 @@ export interface LiteRtModelOptions {
   signal?: AbortSignal
 }
 
+export type LiteRtTypedArray = Float32Array | Int32Array | Int8Array | Uint8Array
 export type LiteRtModelInput = Tensor | Tensor[] | Record<string, Tensor>
 export type LiteRtModelOutput = Tensor[] | Record<string, Tensor>
 
@@ -80,8 +81,8 @@ export interface ManagedLiteRtRuntime {
   getModelInfo(path: string, options?: LiteRtModelOptions): LiteRtModelInfo | undefined
   getTelemetry(): readonly LiteRtTelemetryRecord[]
   clearTelemetry(): void
-  createTensor(data: Float32Array | Int32Array | Uint8Array, shape: number[]): Tensor
-  readTensor<T extends Float32Array | Int32Array | Uint8Array>(tensor: Tensor): T
+  createTensor(data: LiteRtTypedArray, shape: number[]): Tensor
+  readTensor<T extends LiteRtTypedArray>(tensor: Tensor): T
   supportsGpuBufferTensors(): boolean
   disposeModel(path: string): void
   dispose(): void
