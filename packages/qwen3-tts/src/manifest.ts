@@ -49,8 +49,8 @@ export function createQwen3TtsManifest(variant: Qwen3TtsVariant = qwen3TtsVarian
   version: '0.4.0',
   capabilities: ['text-to-speech'],
   backends: variant.backendSupport,
-  memory: { downloadBytes: requiredDownloadBytes, residentBytes: 2_500_000_000 },
-  assets,
+   memory: { downloadBytes: requiredDownloadBytes, residentBytes: 2_500_000_000 },
+   assets,
   }
 }
 

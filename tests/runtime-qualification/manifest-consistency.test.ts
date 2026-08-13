@@ -1,0 +1,38 @@
+import { describe, expect, it } from 'vitest'
+import { mapQualificationStatus } from './schema/types'
+import type { QualificationResult } from './schema/types'
+
+describe('qualification manifest mapping', () => {
+  it('maps passing and limited observations to manifest status', () => {
+    expect(mapQualificationStatus({ status: 'known-limitation' })).toBe('limited')
+    expect(mapQualificationStatus({ status: 'pass' })).toBe('qualified')
+  })
+
+  it('requires runtime and model evidence before claiming qualification', () => {
+    const result: QualificationResult = {
+      schemaVersion: 1,
+      caseId: 'qwen-xnnpack-prefill',
+      timestamp: '2026-08-13T00:00:00.000Z',
+      playgroundRevision: '2fa9aeb',
+      runtimePackage: '@litertjs/core',
+      runtimeVersion: '2.5.3',
+      environment: {
+        runtimePackage: '@litertjs/core',
+        runtimeVersion: '2.5.3',
+        requestedBackend: 'wasm',
+      },
+      model: {
+        id: 'qwen3-tts',
+        revision: 'model-revision',
+        assets: [],
+      },
+      expected: { status: 'known-limitation' },
+      observed: { status: 'fail' },
+      matchesExpectation: true,
+    }
+
+    expect(result.environment.runtimeVersion).toBe('2.5.3')
+    expect(result.model?.revision).toBeTruthy()
+    expect(mapQualificationStatus(result.observed)).toBe('limited')
+  })
+})

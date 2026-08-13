@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://litert-playground.dev/schemas/qualification-result.schema.json",
+  "title": "LiteRT Playground qualification result",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "caseId",
+    "timestamp",
+    "playgroundRevision",
+    "runtimePackage",
+    "runtimeVersion",
+    "environment",
+    "expected",
+    "observed",
+    "matchesExpectation"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "caseId": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "playgroundRevision": { "type": "string", "minLength": 1 },
+    "runtimePackage": { "type": "string", "minLength": 1 },
+    "runtimeVersion": { "type": "string", "minLength": 1 },
+    "environment": { "$ref": "#/$defs/environment" },
+    "model": { "$ref": "#/$defs/model" },
+    "expected": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["pass", "known-limitation"] },
+        "error": { "$ref": "#/$defs/expectedError" }
+      },
+      "additionalProperties": true
+    },
+    "observed": { "$ref": "#/$defs/observation" },
+    "matchesExpectation": { "type": "boolean" }
+  },
+  "$defs": {
+    "environment": {
+      "type": "object",
+      "required": ["runtimePackage", "runtimeVersion", "requestedBackend"],
+      "properties": {
+        "browser": { "type": "string" },
+        "browserVersion": { "type": "string" },
+        "operatingSystem": { "type": "string" },
+        "device": { "type": "string" },
+        "gpu": { "type": "string" },
+        "runtimePackage": { "type": "string", "minLength": 1 },
+        "runtimeVersion": { "type": "string", "minLength": 1 },
+        "requestedBackend": { "enum": ["wasm", "webgpu"] },
+        "resolvedBackend": { "enum": ["wasm", "webgpu"] },
+        "webgpuAvailable": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "asset": {
+      "type": "object",
+      "required": ["id", "url", "bytes", "sha256"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "mimeType": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "model": {
+      "type": "object",
+      "required": ["id", "assets"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "variant": { "type": "string" },
+        "revision": { "type": "string" },
+        "assets": { "type": "array", "items": { "$ref": "#/$defs/asset" } }
+      },
+      "additionalProperties": true
+    },
+    "expectedError": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "stage": { "type": "string" },
+        "messagePattern": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "required": ["message"],
+      "properties": {
+        "code": { "type": "string" },
+        "stage": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "observation": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["pass", "known-limitation", "fail"] },
+        "stage": { "type": "string" },
+        "resolvedBackend": { "enum": ["wasm", "webgpu"] },
+        "diagnostics": { "type": "object", "additionalProperties": true },
+        "error": { "$ref": "#/$defs/error" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

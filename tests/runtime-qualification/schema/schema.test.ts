@@ -1,0 +1,32 @@
+import { describe, expect, it } from 'vitest'
+import type { QualificationResult } from './types'
+import schema from './qualification-result.schema.json'
+
+describe('qualification result schema', () => {
+  it('round-trips a serializable qualification result', () => {
+    const result: QualificationResult = {
+      schemaVersion: 1,
+      caseId: 'tiny-litert-wasm-baseline',
+      timestamp: '2026-08-13T00:00:00.000Z',
+      playgroundRevision: '2fa9aeb',
+      runtimePackage: '@litertjs/core',
+      runtimeVersion: '2.5.3',
+      environment: {
+        runtimePackage: '@litertjs/core',
+        runtimeVersion: '2.5.3',
+        requestedBackend: 'wasm',
+      },
+      expected: { status: 'pass' },
+      observed: { status: 'pass', resolvedBackend: 'wasm' },
+      matchesExpectation: true,
+    }
+
+    expect(JSON.parse(JSON.stringify(result))).toEqual(result)
+  })
+
+  it('requires schema version one and a case identifier', () => {
+    expect(schema.properties.schemaVersion).toEqual({ const: 1 })
+    expect(schema.required).toContain('caseId')
+    expect(schema.required).toContain('matchesExpectation')
+  })
+})
