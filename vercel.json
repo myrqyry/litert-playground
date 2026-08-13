@@ -1,6 +1,6 @@
 {
   "framework": "vite",
-  "installCommand": "pnpm install --frozen-lockfile",
+  "installCommand": "pnpm install --lockfile=false",
   "buildCommand": "pnpm --filter playground build",
   "outputDirectory": "apps/playground/dist"
 }
