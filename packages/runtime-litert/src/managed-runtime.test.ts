@@ -42,6 +42,23 @@ describe('managed LiteRT runtime', () => {
     expect(onTelemetry).toHaveBeenCalledWith(expect.objectContaining({ event: 'compile' }))
   })
 
+  it('deduplicates concurrent model loads', async () => {
+    let releaseCompile!: (model: unknown) => void
+    const compileGate = new Promise((resolve) => { releaseCompile = resolve })
+    vi.mocked(loadAndCompile).mockReturnValue(compileGate as never)
+    const assets = { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(8)) }
+    const context = await createLiteRtRuntime({ backend: 'wasm', assets })
+
+    const first = context.liteRt.loadModel('shared.tflite')
+    const second = context.liteRt.loadModel('shared.tflite')
+    await vi.waitFor(() => expect(loadAndCompile).toHaveBeenCalledTimes(1))
+    releaseCompile({})
+
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+    expect(assets.resolve).toHaveBeenCalledTimes(1)
+    expect(loadAndCompile).toHaveBeenCalledTimes(1)
+  })
+
   it('uses WebNN before WASM when WebGPU compilation fails in auto mode', async () => {
     const device = {}
     vi.stubGlobal('navigator', {
@@ -91,6 +108,23 @@ describe('managed LiteRT runtime', () => {
     expect(context.liteRt.getTelemetry().map((entry) => entry.event)).toEqual(['compile', 'preflight'])
   })
 
+  it('builds int8 preflight tensors for quantized models', async () => {
+    const model = {
+      getInputDetails: vi.fn().mockReturnValue([{ shape: [1, 8], dtype: 'int8' }]),
+      getOutputDetails: vi.fn().mockReturnValue([{ shape: [1, 1], dtype: 'float32' }]),
+      run: vi.fn().mockResolvedValue([{}]),
+    }
+    vi.mocked(loadAndCompile).mockResolvedValue(model as never)
+    const context = await createLiteRtRuntime({
+      backend: 'wasm',
+      assets: { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(8)) },
+    })
+
+    await context.liteRt.preflight('quantized.tflite')
+
+    expect(model.run).toHaveBeenCalledWith([expect.anything()])
+  })
+
   it('supports named-signature prediction and inference telemetry', async () => {
     const result = [{}] as never
     const model = { run: vi.fn().mockResolvedValue(result) }
@@ -111,5 +145,22 @@ describe('managed LiteRT runtime', () => {
       resolvedBackend: 'wasm',
       outputCount: 1,
     })
+  })
+
+  it('bounds telemetry history for long-running consumers', async () => {
+    const model = { run: vi.fn().mockResolvedValue([{}]) }
+    vi.mocked(loadAndCompile).mockResolvedValue(model as never)
+    const context = await createLiteRtRuntime({
+      backend: 'wasm',
+      telemetryLimit: 2,
+      assets: { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(8)) },
+    })
+
+    await context.liteRt.predict('model.tflite', {} as never)
+    await context.liteRt.predict('model.tflite', {} as never)
+    await context.liteRt.predict('model.tflite', {} as never)
+
+    expect(context.liteRt.getTelemetry()).toHaveLength(2)
+    expect(context.liteRt.getTelemetry().every((entry) => entry.event === 'inference')).toBe(true)
   })
 })
