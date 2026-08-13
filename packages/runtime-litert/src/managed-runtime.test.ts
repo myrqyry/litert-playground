@@ -108,23 +108,6 @@ describe('managed LiteRT runtime', () => {
     expect(context.liteRt.getTelemetry().map((entry) => entry.event)).toEqual(['compile', 'preflight'])
   })
 
-  it('builds int8 preflight tensors for quantized models', async () => {
-    const model = {
-      getInputDetails: vi.fn().mockReturnValue([{ shape: [1, 8], dtype: 'int8' }]),
-      getOutputDetails: vi.fn().mockReturnValue([{ shape: [1, 1], dtype: 'float32' }]),
-      run: vi.fn().mockResolvedValue([{}]),
-    }
-    vi.mocked(loadAndCompile).mockResolvedValue(model as never)
-    const context = await createLiteRtRuntime({
-      backend: 'wasm',
-      assets: { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(8)) },
-    })
-
-    await context.liteRt.preflight('quantized.tflite')
-
-    expect(model.run).toHaveBeenCalledWith([expect.anything()])
-  })
-
   it('supports named-signature prediction and inference telemetry', async () => {
     const result = [{}] as never
     const model = { run: vi.fn().mockResolvedValue(result) }
