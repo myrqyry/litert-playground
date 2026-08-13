@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadAndCompile, loadLiteRt, setWebGpuDevice, Tensor } from '@litertjs/core'
 import { createLiteRtRuntime } from './context'
+import { InferenceCoordinator } from './coordinator'
 
 vi.mock('@litertjs/core', async () => {
   const actual = await vi.importActual<typeof import('@litertjs/core')>('@litertjs/core')
@@ -117,6 +118,112 @@ describe('managed LiteRT runtime', () => {
     expect(context.liteRt.getModelInfo('replaceable.tflite')).toMatchObject({
       modelPath: 'replaceable.tflite',
     })
+  })
+
+  it('reloads a fresh model after disposing the cached model', async () => {
+    const firstModel = {}
+    const secondModel = {}
+    vi.mocked(loadAndCompile)
+      .mockResolvedValueOnce(firstModel as never)
+      .mockResolvedValueOnce(secondModel as never)
+    const context = await createLiteRtRuntime({
+      backend: 'wasm',
+      assets: { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(8)) },
+    })
+
+    await expect(context.liteRt.loadModel('reloadable.tflite')).resolves.toBe(firstModel)
+    context.liteRt.disposeModel('reloadable.tflite')
+    await expect(context.liteRt.loadModel('reloadable.tflite')).resolves.toBe(secondModel)
+
+    expect(loadAndCompile).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps WebGPU and WASM model cache entries separate', async () => {
+    const device = {}
+    vi.stubGlobal('navigator', {
+      gpu: { requestAdapter: vi.fn().mockResolvedValue({ requestDevice: vi.fn().mockResolvedValue(device) }) },
+    })
+    const webGpuModel = {}
+    const wasmModel = {}
+    vi.mocked(loadAndCompile)
+      .mockResolvedValueOnce(webGpuModel as never)
+      .mockResolvedValueOnce(wasmModel as never)
+    const context = await createLiteRtRuntime({
+      backend: 'wasm',
+      assets: { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(8)) },
+    })
+
+    await expect(context.liteRt.loadModel('alternating.tflite', { accelerator: 'webgpu' }))
+      .resolves.toBe(webGpuModel)
+    await expect(context.liteRt.loadModel('alternating.tflite', { accelerator: 'wasm' }))
+      .resolves.toBe(wasmModel)
+
+    expect(loadAndCompile).toHaveBeenCalledTimes(2)
+    expect(loadAndCompile).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Uint8Array),
+      expect.objectContaining({ accelerator: 'webgpu' }),
+    )
+    expect(loadAndCompile).toHaveBeenNthCalledWith(
+      2,
+      expect.any(Uint8Array),
+      expect.objectContaining({ accelerator: 'wasm' }),
+    )
+  })
+
+  it('does not execute inference queued before disposal', async () => {
+    let releaseFirst!: (output: unknown) => void
+    const firstGate = new Promise((resolve) => { releaseFirst = resolve })
+    const firstOutput = [{}]
+    const secondOutput = [{}]
+    const model = {
+      run: vi.fn()
+        .mockReturnValueOnce(firstGate)
+        .mockResolvedValueOnce(secondOutput),
+    }
+    vi.mocked(loadAndCompile).mockResolvedValue(model as never)
+    const context = await createLiteRtRuntime({
+      backend: 'wasm',
+      coordinator: new InferenceCoordinator(),
+      assets: { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(8)) },
+    })
+
+    await context.liteRt.loadModel('queued-disposal.tflite')
+    const first = context.liteRt.predict('queued-disposal.tflite', {} as never)
+    await vi.waitFor(() => expect(model.run).toHaveBeenCalledTimes(1))
+    const second = context.liteRt.predict('queued-disposal.tflite', {} as never)
+    context.liteRt.dispose()
+    releaseFirst(firstOutput)
+
+    await expect(first).resolves.toEqual(firstOutput)
+    await expect(second).rejects.toMatchObject({ code: 'INFERENCE_FAILED' })
+    expect(model.run).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns JSON-serializable runtime diagnostics', async () => {
+    const model = { run: vi.fn().mockResolvedValue([{}]) }
+    vi.mocked(loadAndCompile).mockResolvedValue(model as never)
+    const context = await createLiteRtRuntime({
+      backend: 'wasm',
+      packageName: '@example/consumer',
+      assets: { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(8)) },
+    })
+
+    await context.liteRt.predict('diagnostics.tflite', {} as never)
+
+    const diagnostics = context.liteRt.getDiagnostics('diagnostics.tflite')
+    expect(diagnostics).toMatchObject({
+      packageName: '@example/consumer',
+      modelId: 'diagnostics.tflite',
+      requestedBackend: 'wasm',
+      resolvedBackend: 'wasm',
+      cacheHit: true,
+      fallbackCount: 0,
+    })
+    expect(diagnostics?.compileMs).toEqual(expect.any(Number))
+    expect(diagnostics?.inferenceMs).toEqual(expect.any(Number))
+    expect(diagnostics?.queueMs).toEqual(expect.any(Number))
+    expect(JSON.parse(JSON.stringify(diagnostics))).toEqual(diagnostics)
   })
 
   it('uses WebNN before WASM when WebGPU compilation fails in auto mode', async () => {

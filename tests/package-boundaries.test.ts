@@ -166,4 +166,41 @@ describe('workspace package boundaries', () => {
     expect(entrypoint).toContain('ClipImageInput')
     expect(entrypoint).toContain('ClipImageConfig')
   })
+
+  it('keeps the packed consumer fixture on public package entrypoints', async () => {
+    const consumer = await text('tests/fixtures/external-consumer/src/index.ts')
+
+    expect(consumer).toContain("from '@litert-playground/inference-core'")
+    expect(consumer).toContain("from '@litert-playground/runtime-litert'")
+    expect(consumer).not.toMatch(/packages\/.*\/src/)
+    expect(consumer).not.toMatch(/apps\/playground/)
+  })
+
+  it('keeps browser caching separate from core and runtime', async () => {
+    const browserCacheManifest = JSON.parse(
+      await text('packages/browser-cache/package.json'),
+    ) as {
+      dependencies?: Record<string, string>
+      peerDependencies?: Record<string, string>
+    }
+    const browserCache = await text('packages/browser-cache/src/cache.ts')
+    const core = [
+      await text('packages/inference-core/src/index.ts'),
+      await text('packages/inference-core/src/assets/manifest-resolver.ts'),
+    ].join('\n')
+    const runtime = [
+      await text('packages/runtime-litert/src/context.ts'),
+      await text('packages/runtime-litert/src/coordinator.ts'),
+      await text('packages/runtime-litert/src/types.ts'),
+    ].join('\n')
+
+    expect(browserCacheManifest.dependencies).toBeUndefined()
+    expect(browserCacheManifest.peerDependencies).toMatchObject({
+      '@litert-playground/inference-core': '0.1.x',
+    })
+    expect(browserCache).toMatch(/from ['"]@litert-playground\/inference-core['"]/)
+    expect(browserCache).toContain('createOpfsAssetStore')
+    expect(core).not.toMatch(/browser-cache|navigator\.storage|FileSystemDirectoryHandle/)
+    expect(runtime).not.toMatch(/browser-cache|navigator\.storage|FileSystemDirectoryHandle/)
+  })
 })

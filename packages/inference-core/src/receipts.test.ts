@@ -37,4 +37,21 @@ describe('inference receipts', () => {
     })
     expect(receipt.phases).toBeUndefined()
   })
+
+  it('passes diagnostics through when provided', () => {
+    const diagnostics = {
+      packageName: '@litert-playground/test',
+      modelId: 'model',
+      requestedBackend: 'auto' as const,
+      resolvedBackend: 'wasm' as const,
+      cacheHit: false,
+      fallbackCount: 0,
+    }
+    const receipt = createInferenceReceipt({
+      manifest: { modelId: 'model', version: '1.0.0' },
+      backend: 'wasm', loadMs: 2, compileMs: 3, inferenceStart: 10,
+      inputSummary: 'input', outputSummary: 'output', warnings: [], diagnostics,
+    })
+    expect(receipt.diagnostics).toEqual(diagnostics)
+  })
 })

@@ -1,4 +1,4 @@
-import type { Backend, RuntimeContext } from '@litert-playground/inference-core'
+import type { Backend, InferenceDiagnostics, RuntimeContext } from '@litert-playground/inference-core'
 import type { CompiledModel, Tensor, TensorDetails } from '@litertjs/core'
 import type { BackendPreference } from './capabilities'
 import type { InferenceCoordinator } from './coordinator'
@@ -51,6 +51,7 @@ export interface LiteRtPreflightResult extends LiteRtModelInfo {
 }
 
 export interface LiteRtRuntimeOptions {
+  packageName?: string
   assetBase?: string
   backend?: BackendPreference
   assets: RuntimeContext['assets']
@@ -79,6 +80,7 @@ export interface ManagedLiteRtRuntime {
   ): Promise<LiteRtModelOutput>
   preflight(path: string, options?: LiteRtPreflightOptions): Promise<LiteRtPreflightResult>
   getModelInfo(path: string, options?: LiteRtModelOptions): LiteRtModelInfo | undefined
+  getDiagnostics(path: string, options?: LiteRtModelOptions): InferenceDiagnostics | undefined
   getTelemetry(): readonly LiteRtTelemetryRecord[]
   clearTelemetry(): void
   createTensor(data: LiteRtTypedArray, shape: number[]): Tensor

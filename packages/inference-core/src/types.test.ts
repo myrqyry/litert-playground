@@ -5,6 +5,10 @@ import {
   InferenceError,
   type AudioInferenceResult,
   type Capability,
+  type InferenceDiagnostics,
+  type InferenceReceipt,
+  type ModelAsset,
+  type ModelVerification,
   type InferenceResult,
   type Pipeline,
   type RetrievalResult,
@@ -73,5 +77,52 @@ describe('inference core', () => {
     }
     expect(vl.boxes).toHaveLength(1)
     expect(vl.receipt.modelId).toBe('lfm2.5-vl-450m')
+  })
+
+  it('keeps manifest qualification metadata serializable', () => {
+    const asset: ModelAsset = {
+      id: 'model',
+      path: 'model.tflite',
+      mimeType: 'application/octet-stream',
+      role: 'model',
+    }
+    const verification: ModelVerification = {
+      assets: 'pass',
+      compile: 'pass',
+      inference: 'pass',
+      output: 'pass',
+      qualification: 'qualified',
+      upstreamRevision: 'revision-1',
+      environments: [{ browser: 'chromium', backend: 'webgpu', runtime: 'litert.js' }],
+      expectedOutput: {
+        outputShape: [1, 600],
+        labels: { assetId: 'labels', count: 600, mapping: 'index-to-label' },
+        behavior: ['softmax scores'],
+      },
+      lastVerifiedAt: new Date(0).toISOString(),
+    }
+
+    expect(JSON.parse(JSON.stringify({ asset, verification }))).toEqual({ asset, verification })
+  })
+
+  it('keeps diagnostics and receipt values serializable', () => {
+    const diagnostics: InferenceDiagnostics = {
+      packageName: '@litert-playground/test',
+      modelId: 'model',
+      requestedBackend: 'auto',
+      resolvedBackend: 'wasm',
+      cacheHit: true,
+      compileMs: 4,
+      inferenceMs: 5,
+      fallbackCount: 1,
+      queueMs: 2,
+      error: { code: 'INFERENCE_FAILED', message: 'failed', stage: 'run', asset: 'model' },
+    }
+    const receipt: Pick<InferenceReceipt, 'modelId' | 'diagnostics'> = {
+      modelId: 'model',
+      diagnostics,
+    }
+
+    expect(JSON.parse(JSON.stringify({ diagnostics, receipt }))).toEqual({ diagnostics, receipt })
   })
 })

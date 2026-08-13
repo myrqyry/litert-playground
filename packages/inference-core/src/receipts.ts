@@ -1,4 +1,10 @@
-import type { Backend, InferencePhaseReceipt, InferenceReceipt, ModelManifest } from './types'
+import type {
+  Backend,
+  InferenceDiagnostics,
+  InferencePhaseReceipt,
+  InferenceReceipt,
+  ModelManifest,
+} from './types'
 
 export interface InferenceReceiptOptions {
   manifest: Pick<ModelManifest, 'modelId' | 'version'>
@@ -10,6 +16,7 @@ export interface InferenceReceiptOptions {
   outputSummary: string
   warnings: string[]
   phases?: InferencePhaseReceipt[]
+  diagnostics?: InferenceDiagnostics
 }
 
 function environment(): string | undefined {
@@ -31,5 +38,6 @@ export function createInferenceReceipt(options: InferenceReceiptOptions): Infere
     warnings: options.warnings,
     environment: environment(),
     phases: options.phases,
+    diagnostics: options.diagnostics,
   }
 }

@@ -25,12 +25,15 @@ export type Capability =
 
 export type Backend = 'webgpu' | 'wasm' | 'webnn'
 export type VerificationState = 'pass' | 'fail' | 'untested'
+export type QualificationStatus = 'unverified' | 'qualified' | 'limited'
 
 export interface ModelAsset {
   id: string
   path: string
   bytes?: number
   sha256?: string
+  mimeType?: string
+  role?: string
   optional?: boolean
 }
 
@@ -187,13 +190,37 @@ export interface ModelVerification {
   compile: VerificationState
   inference: VerificationState
   output: VerificationState
+  qualification?: QualificationStatus
+  upstreamRevision?: string
+  environments?: ModelVerificationEnvironment[]
+  expectedOutput?: ExpectedOutputCharacteristics
   lastVerifiedAt?: string
   environment?: string
+}
+
+export interface ModelVerificationEnvironment {
+  browser: string
+  backend: Backend
+  runtime: string
+  device?: string
+}
+
+export interface ExpectedOutputCharacteristics {
+  preprocessing?: string[]
+  outputShape?: number[]
+  outputDimension?: number
+  labels?: {
+    assetId: string
+    count: number
+    mapping: string
+  }
+  behavior?: string[]
 }
 
 export type InferenceErrorCode =
   | 'BACKEND_UNAVAILABLE'
   | 'ASSET_FETCH_FAILED'
+  | 'ASSET_INTEGRITY_FAILED'
   | 'MODEL_COMPILE_FAILED'
   | 'INVALID_INPUT'
   | 'OUT_OF_MEMORY'
@@ -239,6 +266,25 @@ export interface InferenceReceipt {
   warnings: string[]
   environment?: string
   phases?: InferencePhaseReceipt[]
+  diagnostics?: InferenceDiagnostics
+}
+
+export interface InferenceDiagnostics {
+  packageName: string
+  modelId: string
+  requestedBackend: Backend | 'auto'
+  resolvedBackend?: Backend
+  cacheHit: boolean
+  compileMs?: number
+  inferenceMs?: number
+  fallbackCount: number
+  queueMs?: number
+  error?: {
+    code: string
+    message: string
+    stage?: string
+    asset?: string
+  }
 }
 
 export interface RuntimeCapabilities {

@@ -10,9 +10,10 @@
     "preview": "pnpm --filter playground preview",
     "test": "pnpm -r --if-present test",
     "test:boundaries": "vitest run tests/package-boundaries.test.ts",
+    "test:compatibility": "node scripts/package-compatibility.mjs",
     "test:watch": "pnpm --filter playground test:watch",
     "typecheck": "pnpm -r --if-present typecheck",
-    "verify": "pnpm typecheck && pnpm test && pnpm test:boundaries && pnpm build"
+    "verify": "pnpm typecheck && pnpm test && pnpm test:boundaries && pnpm test:compatibility && pnpm build"
   },
   "keywords": [],
   "author": "",

@@ -8,6 +8,7 @@ import {
 } from '@litertjs/core'
 import {
   InferenceError,
+  type InferenceDiagnostics,
   type Backend,
   type RuntimeCapabilities,
 } from '@litert-playground/inference-core'
@@ -138,6 +139,7 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
   private readonly pendingLoads = new Map<string, PendingLoad>()
   private readonly modelGenerations = new Map<string, number>()
   private readonly telemetry: LiteRtTelemetryRecord[] = []
+  private readonly diagnostics = new Map<string, InferenceDiagnostics>()
   private resolvedBackend: Backend
   private webGpuDevice: Promise<unknown> | null = null
   private tensorCopies = 0
@@ -252,12 +254,18 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
     return info
   }
 
+  getDiagnostics(path: string, options: LiteRtModelOptions = {}): InferenceDiagnostics | undefined {
+    return this.diagnostics.get(this.modelKey(path, options))
+      ?? [...this.diagnostics.values()].find((candidate) => candidate.modelId === path)
+  }
+
   getTelemetry(): readonly LiteRtTelemetryRecord[] {
     return [...this.telemetry]
   }
 
   clearTelemetry(): void {
     this.telemetry.length = 0
+    this.diagnostics.clear()
     this.tensorCopies = 0
   }
 
@@ -445,6 +453,15 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
         this.models.set(key, entry)
         this.resolvedBackend = backend
         const { model: _model, ...info } = entry
+        this.diagnostics.set(key, {
+          packageName: this.options.packageName ?? '@litert-playground/runtime-litert',
+          modelId: path,
+          requestedBackend,
+          resolvedBackend: backend,
+          cacheHit: false,
+          compileMs: info.compileDurationMs,
+          fallbackCount: info.fallbackCount,
+        })
         this.record({
           ...info,
           event: 'compile',
@@ -485,15 +502,29 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
     const signal = options.signal ?? this.options.signal
     const model = await this.loadModel(path, options)
     const info = this.requireInfo(path, options)
+    const key = this.modelKey(path, options)
+    const queuedAt = performance.now()
     let startedAt = 0
 
     try {
       const output = await (this.options.coordinator ?? defaultCoordinator).run(async () => {
+        this.assertUsable()
         startedAt = performance.now()
         return (signature ? await model.run(signature, input) : await model.run(input)) as LiteRtModelOutput
       }, signal, options.label ?? `litert:${path}`)
 
       const inferenceDurationMs = performance.now() - startedAt
+      this.diagnostics.set(key, {
+        packageName: this.options.packageName ?? '@litert-playground/runtime-litert',
+        modelId: path,
+        requestedBackend: info.requestedBackend,
+        resolvedBackend: info.resolvedBackend,
+        cacheHit: true,
+        compileMs: info.compileDurationMs,
+        inferenceMs: inferenceDurationMs,
+        fallbackCount: info.fallbackCount,
+        queueMs: startedAt - queuedAt,
+      })
       this.record({
         ...info,
         event: 'inference',
@@ -505,6 +536,29 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
       })
       return output
     } catch (cause) {
+      const error = cause instanceof InferenceError
+        ? cause
+        : new InferenceError(
+            isAbort(cause, signal) ? 'CANCELLED' : 'INFERENCE_FAILED',
+            isAbort(cause, signal) ? `Inference cancelled for ${path}` : `Inference failed for ${path}`,
+            { stage: 'inference', cause },
+          )
+      this.diagnostics.set(key, {
+        packageName: this.options.packageName ?? '@litert-playground/runtime-litert',
+        modelId: path,
+        requestedBackend: info.requestedBackend,
+        resolvedBackend: info.resolvedBackend,
+        cacheHit: true,
+        compileMs: info.compileDurationMs,
+        fallbackCount: info.fallbackCount,
+        queueMs: startedAt > 0 ? startedAt - queuedAt : undefined,
+        error: {
+          code: error.code,
+          message: error.message,
+          stage: error.stage,
+          asset: error.asset,
+        },
+      })
       if (cause instanceof InferenceError) throw cause
       if (isAbort(cause, signal)) {
         throw new InferenceError('CANCELLED', `Inference cancelled for ${path}`, { stage: 'inference', cause })

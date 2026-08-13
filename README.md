@@ -130,6 +130,7 @@ pnpm verify
 | `pnpm preview` | Preview the playground production build |
 | `pnpm test` | Run tests in all workspace projects |
 | `pnpm test:boundaries` | Verify package dependency and architecture boundaries |
+| `pnpm test:compatibility` | Pack and consume the supported external package surface |
 | `pnpm test:watch` | Watch-mode tests for the playground |
 | `pnpm typecheck` | Type-check all workspace projects |
 | `pnpm verify` | Typecheck + tests + boundary tests + production builds |
@@ -241,6 +242,10 @@ A useful extraction rule is:
 > probably a package candidate.
 
 ## External consumption
+
+Consuming applications must pin all LiteRT Playground packages to one Git SHA.
+See [Package revision policy](docs/package-revision-policy.md) for the rules
+and the supported compatibility surface.
 
 `@litert-playground/kokoro` already uses an external-consumer-friendly contract
 with `@litert-playground/inference-core` as a peer dependency.
