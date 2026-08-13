@@ -62,4 +62,33 @@ describe('workspace package boundaries', () => {
     expect(entrypoint).toContain('KokoroInput')
     expect(entrypoint).toContain('KokoroConfig')
   })
+
+  it('keeps runtime and Qwen packages externally consumable through peer contracts', async () => {
+    const runtime = JSON.parse(await text('packages/runtime-litert/package.json')) as {
+      dependencies?: Record<string, string>
+      peerDependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+    const qwen = JSON.parse(await text('packages/qwen3-tts/package.json')) as {
+      dependencies?: Record<string, string>
+      peerDependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+
+    expect(runtime.dependencies?.['@litert-playground/inference-core']).toBeUndefined()
+    expect(runtime.peerDependencies).toMatchObject({ '@litert-playground/inference-core': '0.1.x' })
+    expect(runtime.devDependencies).toMatchObject({ '@litert-playground/inference-core': 'workspace:*' })
+
+    expect(qwen.dependencies?.['@litert-playground/inference-core']).toBeUndefined()
+    expect(qwen.dependencies?.['@litert-playground/runtime-litert']).toBeUndefined()
+    expect(qwen.peerDependencies).toMatchObject({
+      '@litert-playground/inference-core': '0.1.x',
+      '@litert-playground/runtime-litert': '0.1.x',
+    })
+    expect(qwen.devDependencies).toMatchObject({
+      '@litert-playground/inference-core': 'workspace:*',
+      '@litert-playground/runtime-litert': 'workspace:*',
+    })
+    expect(qwen.dependencies?.['@litertjs/core']).toBe('^2.5.3')
+  })
 })

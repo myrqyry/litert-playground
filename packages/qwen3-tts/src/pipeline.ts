@@ -18,6 +18,7 @@ export type { QwenTtsInput, QwenTtsConfig }
 export interface Qwen3TtsPipelineOptions {
   workerBase?: string
   modelBase?: string
+  executionMode?: 'auto' | 'direct' | 'workers'
 }
 
 const WORKER_BASE = '/litert-wasm/'
@@ -32,6 +33,7 @@ export class Qwen3TtsPipeline {
   private readonly variant: Qwen3TtsVariant
   private readonly workerBase: string
   private readonly modelBase: string
+  private readonly executionMode: NonNullable<Qwen3TtsPipelineOptions['executionMode']>
   private context: RuntimeContext | null = null
   private disposed = false
 
@@ -39,6 +41,7 @@ export class Qwen3TtsPipeline {
     this.variant = variant
     this.workerBase = options.workerBase ?? WORKER_BASE
     this.modelBase = options.modelBase ?? MODEL_BASE
+    this.executionMode = options.executionMode ?? 'auto'
     this.manifest = createQwen3TtsManifest(variant)
   }
 
@@ -70,7 +73,9 @@ export class Qwen3TtsPipeline {
       let audio: Float32Array
       let phases
 
-      if (typeof Worker === 'undefined') {
+      const useDirect = this.executionMode === 'direct' || (this.executionMode === 'auto' && typeof Worker === 'undefined')
+
+      if (useDirect) {
         const genPhase = new GeneratorPhase(this.variant, { onProgress: (p) => this.report(p) })
         let frames
         try {

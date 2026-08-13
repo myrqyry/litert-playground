@@ -121,4 +121,29 @@ describe('Qwen3TtsPipeline', () => {
     expect(sent.filter((s) => s.type === 'decode').length).toBe(1);
     vi.unstubAllGlobals();
   });
+
+  it('run() in direct mode avoids nested workers even when Worker exists', async () => {
+    const FakeWorker = vi.fn();
+    vi.stubGlobal('Worker', FakeWorker);
+    const directPipeline = new Qwen3TtsPipeline(qwen3TtsVariants.int4, { executionMode: 'direct' });
+    const context = {
+      backend: 'wasm' as const,
+      assets: { resolve: vi.fn().mockResolvedValue(new ArrayBuffer(1)) },
+      liteRt: {
+        loadModel: vi.fn().mockResolvedValue({
+          signatures: { decode: { getInputDetails: () => [{ name: 'mask', shape: [1, 1, 32, 32] }] } },
+        }),
+        loadNpy: vi.fn().mockResolvedValue(new Float32Array(3072 * 1024)),
+        fetchBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(1)),
+      },
+    };
+
+    await directPipeline.load(context);
+    const result = await directPipeline.run({ text: 'hello' }, { maxFrames: 1 });
+
+    expect(result.kind).toBe('audio');
+    expect(result.receipt.phases?.map((phase) => phase.name)).toEqual(['generator', 'decoder']);
+    expect(FakeWorker).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
 });
