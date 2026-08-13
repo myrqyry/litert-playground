@@ -13,6 +13,7 @@ export interface LiteRtModelOptions {
   accelerator?: BackendPreference
   supportedBackends?: Partial<Record<Backend, boolean | 'experimental'>>
   webNNOptions?: WebNNRuntimeOptions
+  signal?: AbortSignal
 }
 
 export type LiteRtModelInput = Tensor | Tensor[] | Record<string, Tensor>
@@ -32,11 +33,11 @@ export interface LiteRtTelemetryRecord extends LiteRtModelInfo {
   inferenceDurationMs?: number
   inputCount?: number
   outputCount?: number
+  tensorCopyCount: number
 }
 
 export interface LiteRtPreflightOptions extends LiteRtModelOptions {
   signature?: string
-  signal?: AbortSignal
   maxTensorElements?: number
   createInputs?: (inputDetails: readonly TensorDetails[]) => LiteRtModelInput
 }
@@ -56,23 +57,24 @@ export interface LiteRtRuntimeOptions {
   supportedBackends?: Partial<Record<Backend, boolean | 'experimental'>>
   webNNOptions?: WebNNRuntimeOptions
   coordinator?: InferenceCoordinator
+  telemetryLimit?: number
   onTelemetry?: (record: LiteRtTelemetryRecord) => void
 }
 
 export interface ManagedLiteRtRuntime {
   loadModel(path: string, options?: LiteRtModelOptions): Promise<CompiledModel>
-  loadNpy(path: string): Promise<Float32Array>
-  fetchBuffer(path: string): Promise<ArrayBuffer>
+  loadNpy(path: string, signal?: AbortSignal): Promise<Float32Array>
+  fetchBuffer(path: string, signal?: AbortSignal): Promise<ArrayBuffer>
   predict(
     path: string,
     input: LiteRtModelInput,
-    options?: LiteRtModelOptions & { signal?: AbortSignal; label?: string },
+    options?: LiteRtModelOptions & { label?: string },
   ): Promise<LiteRtModelOutput>
   predictWithSignature(
     path: string,
     signature: string,
     input: LiteRtModelInput,
-    options?: LiteRtModelOptions & { signal?: AbortSignal; label?: string },
+    options?: LiteRtModelOptions & { label?: string },
   ): Promise<LiteRtModelOutput>
   preflight(path: string, options?: LiteRtPreflightOptions): Promise<LiteRtPreflightResult>
   getModelInfo(path: string, options?: LiteRtModelOptions): LiteRtModelInfo | undefined
