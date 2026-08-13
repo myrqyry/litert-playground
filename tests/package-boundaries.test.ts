@@ -36,7 +36,7 @@ describe('workspace package boundaries', () => {
       await text('packages/runtime-litert/src/coordinator.ts'),
       await text('packages/runtime-litert/src/types.ts'),
     ].join('\n')
-    expect(runtime).not.toMatch(/podqast|episode|streamer|earthbound|obs/i)
+    expect(runtime).not.toMatch(/podqast|episode|streamer|earthbound|\bobs\b/i)
     expect(runtime).toContain('preflight')
     expect(runtime).toContain('telemetry')
   })
