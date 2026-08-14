@@ -4,11 +4,11 @@ import { formatQualificationMatrix, parseQualificationArgs } from './run-qualifi
 describe('qualification CLI', () => {
   it('parses repeated case and backend filters', () => {
     expect(parseQualificationArgs([
-      '--case', 'qwen-xnnpack-prefill',
+      '--case', 'qwen-browsermemory-generator',
       '--case', 'module-worker-loader',
       '--backend', 'wasm',
     ])).toEqual({
-      caseIds: ['qwen-xnnpack-prefill', 'module-worker-loader'],
+      caseIds: ['qwen-browsermemory-generator', 'module-worker-loader'],
       backends: ['wasm'],
       browserName: 'chromium',
       headed: false,

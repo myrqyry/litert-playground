@@ -17,7 +17,7 @@ describe('qualification manifest mapping', () => {
   it('requires runtime and model evidence before claiming qualification', () => {
     const result: QualificationResult = {
       schemaVersion: 1,
-      caseId: 'qwen-xnnpack-prefill',
+      caseId: 'qwen-browsermemory-generator',
       evidenceKind: 'contract',
       timestamp: '2026-08-13T00:00:00.000Z',
       playgroundRevision: '2fa9aeb',
@@ -33,7 +33,7 @@ describe('qualification manifest mapping', () => {
         revision: 'model-revision',
         assets: [],
       },
-      expected: { status: 'known-limitation' },
+      expected: { status: 'known-limitation', error: { stage: 'talker-prefill' } },
       observed: { status: 'fail' },
       matchesExpectation: true,
     }
