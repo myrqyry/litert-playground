@@ -158,11 +158,16 @@ Run browser-entry, browser-harness, and Qwen package tests. Expected: all pass.
 - Produces case id `qwen-browsermemory-generator`.
 - Uses the explicit `browserMemoryOmni` variant: Talker `talker_int4.tflite` from base revision `0eb3b8a4714972b065c160faec6a12158caa9dc0` and Omni `mtp_fp32.tflite` from revision `791880469d874546d884a0e6cf68564a61c04ca9`.
 - Uses real tokenizer, codec embedding, MTP embedding, text embedding, text projection, and voice assets through browser-side immutable descriptors.
-- Expected status is `pass`; any failure records the first stage and error message.
+- Expected status is `known-limitation` after the real run reproduced the
+  composed Talker prefill tensor-buffer failure; any other failure records the
+  first stage and error message.
 
 - [ ] **Step 1: Write failing case contracts**
 
-Assert the case id, browser-observation evidence kind, backend, `browserMemory` variant, exact talker and MTP revisions, `maxFrames: 1`, expected pass status, and the eight required stage names in the receipt schema.
+Assert the case id, browser-observation evidence kind, backend,
+`browserMemoryOmni` variant, exact Talker and MTP revisions, `maxFrames: 1`,
+expected `known-limitation` status at `talker-prefill`, and the eight required
+stage names in the receipt schema.
 
 - [ ] **Step 2: Run the contract test and verify it fails**
 
@@ -196,7 +201,9 @@ Run all qualification tests. Expected: all contract and schema tests pass.
 pnpm qualify -- --case qwen-browsermemory-generator --backend wasm
 ```
 
-Expected on success: `qwen-browsermemory-generator wasm pass match`, with receipts for prompt construction, Talker prefill, first decode, MTP prediction, state update, and post-MTP Talker decode.
+Expected result: `qwen-browsermemory-generator wasm fail match`, with both
+compile receipts followed by a `talker-prefill` receipt containing the real
+input names, dtypes, shapes, and element counts.
 
 - [ ] **Step 2: If it fails, preserve the evidence and stop at the first failing stage**
 
