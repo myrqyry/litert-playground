@@ -7,6 +7,7 @@
   "required": [
     "schemaVersion",
     "caseId",
+    "evidenceKind",
     "timestamp",
     "playgroundRevision",
     "runtimePackage",
@@ -19,6 +20,7 @@
   "properties": {
     "schemaVersion": { "const": 1 },
     "caseId": { "type": "string", "minLength": 1 },
+    "evidenceKind": { "enum": ["contract", "browser-observation"] },
     "timestamp": { "type": "string", "format": "date-time" },
     "playgroundRevision": { "type": "string", "minLength": 1 },
     "runtimePackage": { "type": "string", "minLength": 1 },
@@ -101,7 +103,7 @@
       "type": "object",
       "required": ["status"],
       "properties": {
-        "status": { "enum": ["pass", "known-limitation", "fail"] },
+        "status": { "enum": ["pass", "known-limitation", "fail", "unsupported"] },
         "stage": { "type": "string" },
         "resolvedBackend": { "enum": ["wasm", "webgpu"] },
         "diagnostics": { "type": "object", "additionalProperties": true },

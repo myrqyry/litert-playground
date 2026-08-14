@@ -32,18 +32,34 @@ export async function runQualificationCase(
   options: QualificationRunOptions,
 ): Promise<QualificationResult> {
   let observed
-  try {
-    observed = await qualificationCase.run(context)
-  } catch (error) {
+  if (
+    context.requestedBackend === 'webgpu'
+    && context.environment.webgpuAvailable === false
+  ) {
     observed = {
-      status: 'fail' as const,
-      stage: 'run',
-      error: normalizeQualificationError(error, 'run'),
+      status: 'unsupported' as const,
+      stage: 'capability',
+      error: {
+        code: 'BACKEND_UNAVAILABLE',
+        stage: 'capability',
+        message: 'WebGPU is unavailable in this browser environment',
+      },
+    }
+  } else {
+    try {
+      observed = await qualificationCase.run(context)
+    } catch (error) {
+      observed = {
+        status: 'fail' as const,
+        stage: 'run',
+        error: normalizeQualificationError(error, 'run'),
+      }
     }
   }
 
   const result = createQualificationResult({
     caseId: qualificationCase.id,
+    evidenceKind: qualificationCase.evidenceKind,
     timestamp: (options.now ?? (() => new Date()))().toISOString(),
     playgroundRevision: options.playgroundRevision,
     runtimePackage: options.runtimePackage,

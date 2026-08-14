@@ -2,20 +2,18 @@ import type { QualificationCase, QualificationContext, QualificationObservation 
 import { moduleWorkerLoaderExpected } from './expected'
 
 export async function runModuleWorkerLoader(
-  _context: QualificationContext,
+  context: QualificationContext,
 ): Promise<QualificationObservation> {
-  return {
-    status: 'fail',
-    stage: 'worker-load',
-    error: {
-      message: 'importScripts is unavailable from the module worker loader.',
-    },
+  if (!context.runtime.runModuleWorkerLoader) {
+    throw new Error('Module worker browser adapter is unavailable')
   }
+  return context.runtime.runModuleWorkerLoader()
 }
 
 export const moduleWorkerLoaderCase: QualificationCase = {
   id: 'module-worker-loader',
   description: 'Reproduces Qwen LiteRT loader behavior in a module worker.',
+  evidenceKind: 'browser-observation',
   environments: [{
     runtimePackage: '@litertjs/core',
     runtimeVersion: '2.5.3',

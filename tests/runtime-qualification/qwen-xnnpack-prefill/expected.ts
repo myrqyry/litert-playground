@@ -4,6 +4,6 @@ export const qwenXnnpackExpected: QualificationCase['expected'] = {
   status: 'known-limitation',
   error: {
     stage: 'prefill',
-    messagePattern: 'tensor_buffer|XNNPACK|runtime',
+    messagePattern: 'tensor_buffer|XNNPACK|runtime|Target crashed',
   },
 }

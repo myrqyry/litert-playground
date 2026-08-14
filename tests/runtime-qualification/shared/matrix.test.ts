@@ -22,6 +22,7 @@ const context = (requestedBackend: 'wasm' | 'webgpu'): QualificationContext => (
 const qualificationCase: QualificationCase = {
   id: 'case',
   description: 'controlled case',
+  evidenceKind: 'contract',
   environments: [context('wasm').environment],
   expected: { status: 'pass' },
   run: async ({ requestedBackend }) => ({
@@ -77,5 +78,40 @@ describe('qualification matrix', () => {
     )
 
     expect(results).toHaveLength(0)
+  })
+
+  it('reports unavailable WebGPU without running the model', async () => {
+    let ran = false
+    const webgpuCase: QualificationCase = {
+      ...qualificationCase,
+      id: 'webgpu-case',
+      evidenceKind: 'browser-observation',
+      environments: [context('webgpu').environment],
+      run: async () => {
+        ran = true
+        return { status: 'pass' }
+      },
+    }
+    const unavailable = context('webgpu')
+    unavailable.environment.webgpuAvailable = false
+
+    const [result] = await (await import('./matrix')).runQualificationMatrix(
+      [webgpuCase],
+      {},
+      [unavailable],
+      {
+        playgroundRevision: 'abc',
+        runtimePackage: '@litertjs/core',
+        runtimeVersion: '2.5.3',
+      },
+    )
+
+    expect(ran).toBe(false)
+    expect(result.observed).toMatchObject({
+      status: 'unsupported',
+      stage: 'capability',
+      error: { code: 'BACKEND_UNAVAILABLE' },
+    })
+    expect(result.matchesExpectation).toBe(false)
   })
 })

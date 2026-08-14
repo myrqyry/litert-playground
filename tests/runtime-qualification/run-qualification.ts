@@ -68,7 +68,10 @@ async function main(): Promise<void> {
   const packageJson = JSON.parse(await readFile(join(process.cwd(), 'package.json'), 'utf8')) as {
     dependencies?: Record<string, string>
   }
-  const results = await runBrowserQualification(cases, {
+  const browserCases = options.caseIds
+    ? cases
+    : cases.filter((qualificationCase) => qualificationCase.evidenceKind === 'browser-observation')
+  const results = await runBrowserQualification(browserCases, {
     launch: { browserName: options.browserName, headless: !options.headed },
     selection,
     playgroundRevision: process.env.GITHUB_SHA ?? 'working-tree',

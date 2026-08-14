@@ -61,6 +61,7 @@ describe('qualification evidence', () => {
     const directory = await mkdtemp(join(tmpdir(), 'qualification-'))
     const result = createQualificationResult({
       caseId: 'case',
+      evidenceKind: 'browser-observation',
       timestamp: '2026-08-13T00:00:00.000Z',
       playgroundRevision: 'abc',
       runtimePackage: '@litertjs/core',

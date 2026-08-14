@@ -6,22 +6,51 @@ import type {
   QualificationResult,
   QualificationRunOptions,
   QualificationSelection,
+  QualificationTensor,
+  QualificationTensorInput,
 } from '../schema/types'
 import type { ModelAssetDescriptor } from '../schema/types'
 import { captureBrowserEnvironment } from './environment'
 import { runQualificationMatrix } from './matrix'
 import { createServer, type ViteDevServer } from 'vite'
+import { createQualificationTypedArray, serializeQualificationInput } from './tensorBridge'
 
 interface BrowserRuntimeApi {
   initialize(path: string): Promise<void>
+  fetchAsset(descriptor: Pick<ModelAssetDescriptor, 'id' | 'url' | 'bytes' | 'sha256'>): Promise<number[]>
+  runModuleWorkerLoader(): Promise<{
+    status: 'pass' | 'fail'
+    stage?: string
+    error?: { message: string }
+  }>
   loadAndCompile(model: number[], accelerator: QualificationBackend): Promise<{
     id: number
-    inputs: Array<{ shape: number[]; dtype: string }>
-    outputs: Array<{ shape: number[]; dtype: string }>
+    inputs: Array<{ name: string; shape: number[]; dtype: 'float32' | 'int32' | 'uint8' }>
+    outputs: Array<{ name: string; shape: number[]; dtype: 'float32' | 'int32' | 'uint8' }>
   }>
-  run(id: number, values: Float32Array[], shapes: number[][]): Promise<number[][]>
+  getSignatureDetails(id: number, signature: string): Promise<{
+    inputs: Array<{ name: string; shape: number[]; dtype: 'float32' | 'int32' | 'uint8' }>
+    outputs: Array<{ name: string; shape: number[]; dtype: 'float32' | 'int32' | 'uint8' }>
+  }>
+  getModelDetails(id: number): Promise<{
+    inputs: Array<{ name: string; shape: number[]; dtype: 'float32' | 'int32' | 'uint8' }>
+    outputs: Array<{ name: string; shape: number[]; dtype: 'float32' | 'int32' | 'uint8' }>
+  }>
+  runSignatureWithZeros(id: number, signature: string): Promise<void>
+  loadAndCompileAsset(asset: ModelAssetDescriptor, accelerator: QualificationBackend): Promise<number>
+  run(id: number, request: ReturnType<typeof serializeQualificationInput>): Promise<BrowserSerializedOutput>
   delete(id: number): void
 }
+
+interface BrowserSerializedTensor {
+  data: number[]
+  shape: number[]
+  dtype: 'float32' | 'int32' | 'uint8'
+}
+
+type BrowserSerializedOutput =
+  | { kind: 'positional'; tensors: BrowserSerializedTensor[] }
+  | { kind: 'named'; tensors: Record<string, BrowserSerializedTensor> }
 
 declare global {
   interface Window {
@@ -62,6 +91,17 @@ export async function runBrowserQualification(
   cases: QualificationCase[],
   options: BrowserQualificationOptions,
 ): Promise<QualificationResult[]> {
+  const selectedCases = options.selection.caseIds
+    ? cases.filter((item) => options.selection.caseIds?.includes(item.id))
+    : cases
+  const contractOnly = selectedCases.filter(
+    (qualificationCase) => qualificationCase.evidenceKind !== 'browser-observation',
+  )
+  if (contractOnly.length > 0) {
+    throw new Error(
+      `Browser qualification requires browser-observation cases: ${contractOnly.map((item) => item.id).join(', ')}`,
+    )
+  }
   const launcher = options.launcher ?? createPlaywrightLauncher()
   return launcher(options.launch, async (capabilities, runtime, fetchAsset) => {
     const contexts: QualificationContext[] = cases
@@ -115,36 +155,87 @@ function createPlaywrightLauncher(): BrowserLauncher {
       const capabilities: BrowserCapabilities = {
         browser: options.browserName,
         browserVersion: browser.version(),
-        webgpuAvailable: await page.evaluate(() => 'gpu' in navigator),
+        webgpuAvailable: await page.evaluate(async () => {
+          const gpu = (navigator as Navigator & {
+            gpu?: { requestAdapter(): Promise<unknown> }
+          }).gpu
+          if (!gpu) return false
+          try {
+            return Boolean(await gpu.requestAdapter())
+          } catch {
+            return false
+          }
+        }),
       }
+      const createCompiledModel = (result: Awaited<ReturnType<BrowserRuntimeApi['loadAndCompile']>>) => ({
+        getInputDetails: () => result.inputs,
+        getOutputDetails: () => result.outputs,
+        getSignatureDetails: async (signature: string) => {
+          const details = await page.evaluate(
+            ({ id, signature }) => window.litertQualification.getSignatureDetails(id, signature),
+            { id: result.id, signature },
+          )
+          return details
+        },
+        getModelDetails: () => page.evaluate(
+          (id) => window.litertQualification.getModelDetails(id),
+          result.id,
+        ),
+        runSignatureWithZeros: (signature: string) => page.evaluate(
+          ({ id, signature }) => window.litertQualification.runSignatureWithZeros(id, signature),
+          { id: result.id, signature },
+        ),
+        run: async (
+          input: QualificationTensorInput,
+          signature?: string,
+        ) => {
+          const request = serializeQualificationInput({ input, signature })
+          const output = await page.evaluate(
+            ({ id, request }) => window.litertQualification.run(id, request),
+            { id: result.id, request },
+          )
+          const deserialize = (tensor: {
+            data: number[]
+            shape: number[]
+            dtype: 'float32' | 'int32' | 'uint8'
+          }): QualificationTensor => ({
+            data: createQualificationTypedArray(tensor.dtype, tensor.data),
+            shape: tensor.shape,
+            dtype: tensor.dtype,
+          })
+          return output.kind === 'positional'
+            ? output.tensors.map(deserialize)
+            : Object.fromEntries(
+              Object.entries(output.tensors).map(([name, tensor]) => [name, deserialize(tensor)]),
+            )
+        },
+        delete: async () => {
+          await page.evaluate((id) => window.litertQualification.delete(id), result.id)
+        },
+      })
       const runtime = {
         initialize: () => page.evaluate((path) => window.litertQualification.initialize(path), '/node_modules/@litertjs/core/wasm'),
+        runModuleWorkerLoader: () => page.evaluate(() => window.litertQualification.runModuleWorkerLoader()),
         loadAndCompile: async (model: Uint8Array, compileOptions: { accelerator: QualificationBackend }) => {
           const result = await page.evaluate(async ({ model, accelerator }) => window.litertQualification.loadAndCompile(model, accelerator), {
               model: Array.from(model),
             accelerator: compileOptions.accelerator,
           })
-          return {
-            getInputDetails: () => result.inputs,
-            getOutputDetails: () => result.outputs,
-            run: async (inputs: Array<{ data: unknown; shape?: readonly number[] }>) => {
-              const values = inputs.map((input) => Array.from(input.data as Float32Array))
-              const shapes = inputs.map((input) => [...(input.shape ?? [])])
-              const outputs = await page.evaluate(({ id, values, shapes }) => window.litertQualification.run(id, values.map((value) => new Float32Array(value)), shapes), { id: result.id, values, shapes })
-              return outputs.map((data: number[]) => ({ data: new Float32Array(data) }))
-            },
-            delete: () => page.evaluate((id) => window.litertQualification.delete(id), result.id),
-          }
+          return createCompiledModel(result)
+        },
+        loadAndCompileAsset: async (asset: ModelAssetDescriptor, compileOptions: { accelerator: QualificationBackend }) => {
+          const result = await page.evaluate(
+            ({ asset, accelerator }) => window.litertQualification.loadAndCompileAsset(asset, accelerator),
+            { asset, accelerator: compileOptions.accelerator },
+          )
+          return createCompiledModel({ id: result, inputs: [], outputs: [] })
         },
       }
       const fetchAsset = async (asset: ModelAssetDescriptor): Promise<ArrayBuffer> => {
-        const bytes = await page.evaluate(async (descriptor) => {
-        const response = await fetch(descriptor.url)
-        if (!response.ok) throw new Error(`Asset request failed: ${response.status}`)
-        const buffer = await response.arrayBuffer()
-        if (buffer.byteLength !== descriptor.bytes) throw new Error(`Asset ${descriptor.id} expected ${descriptor.bytes} bytes, got ${buffer.byteLength}`)
-          return Array.from(new Uint8Array(buffer))
-        }, asset)
+        const bytes = await page.evaluate(
+          (descriptor) => window.litertQualification.fetchAsset(descriptor),
+          asset,
+        )
         return new Uint8Array(bytes).buffer
       }
       return await run(capabilities, runtime, fetchAsset)

@@ -13,23 +13,26 @@ Run the deterministic lane with:
 pnpm test:qualification
 ```
 
-Run the browser lane with:
+Run the real browser lane with the verified baseline:
 
 ```bash
-pnpm qualify -- --case qwen-xnnpack-prefill --backend wasm
+pnpm qualify -- --case tiny-litert-wasm-baseline --backend wasm
 ```
 
-Use repeated `--case` and `--backend` flags to select multiple entries. Use
+Use repeated `--case` and `--backend` flags to select multiple browser-backed
+entries. Contract-only cases are available to deterministic tests but are
+blocked from browser qualification until a real reproduction exists. Use
 `--browser chromium|firefox|webkit` and `--headed` when browser inspection is
 needed.
 
 ## Evidence
 
-Generated results use `schemaVersion: 1` and record the case, full Playground
-revision, LiteRT.js package and version, browser capabilities, requested and
-resolved backend, model revision, expected status, observed status, structured
-error, and `matchesExpectation`. Files are written under `results/` and are
-ignored by Git except for `.gitkeep`.
+Generated results use `schemaVersion: 1` and record the case,
+`evidenceKind`, full Playground revision, LiteRT.js package and version,
+browser capabilities, requested and resolved backend, model revision, expected
+status, observed status, structured error, and `matchesExpectation`. Only
+`browser-observation` results can feed manifest qualification. Files are
+written under `results/` and are ignored by Git except for `.gitkeep`.
 
 A reproduced known limitation is an observed failure that matches the case
 expectation. If an upstream fix makes a known-limitation case pass, the result

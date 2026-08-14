@@ -28,13 +28,14 @@ export async function runTinyLitertBaseline(
       resolvedBackend: context.requestedBackend,
     }
   } finally {
-    model.delete()
+    await model.delete()
   }
 }
 
 export const tinyLitertBaselineCase: QualificationCase = {
   id: 'tiny-litert-wasm-baseline',
   description: 'A tiny valid TFLite model provides a known-good runtime baseline.',
+  evidenceKind: 'browser-observation',
   model: {
     id: 'add-10x10',
     revision: '16d8551be578965fe194e4d75f414f48c7b4e75a',

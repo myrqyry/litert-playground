@@ -7,6 +7,7 @@ describe('qualification result schema', () => {
     const result: QualificationResult = {
       schemaVersion: 1,
       caseId: 'tiny-litert-wasm-baseline',
+      evidenceKind: 'browser-observation',
       timestamp: '2026-08-13T00:00:00.000Z',
       playgroundRevision: '2fa9aeb',
       runtimePackage: '@litertjs/core',
@@ -24,9 +25,14 @@ describe('qualification result schema', () => {
     expect(JSON.parse(JSON.stringify(result))).toEqual(result)
   })
 
+  it('accepts an explicit unsupported backend observation', () => {
+    expect(schema.$defs.observation.properties.status.enum).toContain('unsupported')
+  })
+
   it('requires schema version one and a case identifier', () => {
     expect(schema.properties.schemaVersion).toEqual({ const: 1 })
     expect(schema.required).toContain('caseId')
+    expect(schema.required).toContain('evidenceKind')
     expect(schema.required).toContain('matchesExpectation')
   })
 })

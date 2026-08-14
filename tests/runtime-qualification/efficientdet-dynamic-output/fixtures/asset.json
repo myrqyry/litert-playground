@@ -1,0 +1,7 @@
+{
+  "id": "model",
+  "url": "https://tfhub.dev/tensorflow/lite-model/efficientdet/lite0/detection/metadata/1?lite-format=tflite",
+  "bytes": 4563519,
+  "sha256": "2e04c53bfeac0ac2a30c057c7e2a777594ce39baaac35a92f74fb1e8c4fc4e0b",
+  "mimeType": "application/octet-stream"
+}

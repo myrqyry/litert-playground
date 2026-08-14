@@ -1,7 +1,9 @@
 import type { InferenceDiagnostics } from '../../../packages/inference-core/src/types'
 
-export type QualificationStatus = 'pass' | 'known-limitation' | 'fail'
+export type QualificationStatus = 'pass' | 'known-limitation' | 'fail' | 'unsupported'
 export type QualificationBackend = 'wasm' | 'webgpu'
+export type QualificationEvidenceKind = 'contract' | 'browser-observation'
+export type QualificationDType = 'float32' | 'int32' | 'uint8'
 
 export interface QualificationEnvironment {
   browser?: string
@@ -54,8 +56,13 @@ export interface QualificationContext {
 
 export interface QualificationRuntime {
   initialize?(): Promise<void>
+  runModuleWorkerLoader?(): Promise<QualificationObservation>
   loadAndCompile(
     model: Uint8Array,
+    options: { accelerator: QualificationBackend },
+  ): Promise<QualificationCompiledModel>
+  loadAndCompileAsset?(
+    asset: ModelAssetDescriptor,
     options: { accelerator: QualificationBackend },
   ): Promise<QualificationCompiledModel>
 }
@@ -63,23 +70,46 @@ export interface QualificationRuntime {
 export interface QualificationCompiledModel {
   getInputDetails(): readonly QualificationTensorDetails[]
   getOutputDetails(): readonly QualificationTensorDetails[]
-  run(input: QualificationTensor[]): Promise<QualificationTensor[]>
-  delete(): void
+  getModelDetails?(): Promise<{
+    inputs: readonly QualificationTensorDetails[]
+    outputs: readonly QualificationTensorDetails[]
+  }>
+  getSignatureDetails(signature: string): Promise<{
+    inputs: readonly QualificationTensorDetails[]
+    outputs: readonly QualificationTensorDetails[]
+  }>
+  runSignatureWithZeros?(signature: string): Promise<void>
+  run(
+    input: QualificationTensorInput,
+    signature?: string,
+  ): Promise<QualificationTensorOutput>
+  delete(): Promise<void> | void
 }
 
 export interface QualificationTensorDetails {
+  name: string
   shape: readonly number[]
-  dtype: string
+  dtype: QualificationDType
 }
 
 export interface QualificationTensor {
   data: unknown
   shape?: readonly number[]
+  dtype?: QualificationDType
 }
+
+export type QualificationTensorInput =
+  | QualificationTensor[]
+  | Record<string, QualificationTensor>
+
+export type QualificationTensorOutput =
+  | QualificationTensor[]
+  | Record<string, QualificationTensor>
 
 export interface QualificationCase {
   id: string
   description: string
+  evidenceKind: QualificationEvidenceKind
   model?: QualificationModel
   environments: QualificationEnvironment[]
   expected: {
@@ -96,6 +126,7 @@ export interface QualificationCase {
 export interface QualificationResult {
   schemaVersion: 1
   caseId: string
+  evidenceKind: QualificationEvidenceKind
   timestamp: string
   playgroundRevision: string
   runtimePackage: string
@@ -129,7 +160,10 @@ export function matchQualificationExpectation(
 }
 
 export function mapQualificationStatus(
-  result: Pick<QualificationObservation, 'status'>,
+  result: Pick<QualificationResult, 'evidenceKind' | 'observed'>,
 ): 'limited' | 'qualified' {
-  return result.status === 'pass' ? 'qualified' : 'limited'
+  if (result.evidenceKind !== 'browser-observation') {
+    throw new Error('Manifest qualification requires browser observation evidence')
+  }
+  return result.observed.status === 'pass' ? 'qualified' : 'limited'
 }

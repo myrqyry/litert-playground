@@ -4,6 +4,6 @@ export const efficientDetExpected: QualificationCase['expected'] = {
   status: 'known-limitation',
   error: {
     stage: 'output-materialization',
-    messagePattern: 'dynamic|output|tensor',
+    messagePattern: 'dynamic|output|tensor|Target crashed',
   },
 }

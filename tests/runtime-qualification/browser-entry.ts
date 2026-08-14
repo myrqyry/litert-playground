@@ -1,38 +1,209 @@
-import { loadAndCompile, loadLiteRt, Tensor } from '@litertjs/core'
+import { loadAndCompile, loadLiteRt, setWebGpuDevice, Tensor } from '@litertjs/core'
+import {
+  createQualificationTypedArray,
+  createQualificationZeroTypedArray,
+  serializeQualificationInput,
+} from './shared/tensorBridge'
+import { verifyQualificationAsset } from './shared/assetVerification'
+import type { ModelAssetDescriptor } from './schema/types'
 
 const models = new Map<number, Awaited<ReturnType<typeof loadAndCompile>>>()
 let nextModelId = 1
+
+function describeAndStoreModel(
+  model: Awaited<ReturnType<typeof loadAndCompile>>,
+  includeDetails = true,
+) {
+  const details = (runner: {
+    getInputDetails(): readonly { name: string; shape: Int32Array; dtype: 'float32' | 'int32' | 'uint8' }[]
+    getOutputDetails(): readonly { name: string; shape: Int32Array; dtype: 'float32' | 'int32' | 'uint8' }[]
+  }) => ({
+    inputs: runner.getInputDetails().map((detail) => ({
+      name: detail.name,
+      shape: Array.from(detail.shape.slice(0, 16)),
+      dtype: detail.dtype,
+    })),
+    outputs: runner.getOutputDetails().map((detail) => ({
+      name: detail.name,
+      shape: Array.from(detail.shape.slice(0, 16)),
+      dtype: detail.dtype,
+    })),
+  })
+  const id = nextModelId++
+  models.set(id, model)
+  return includeDetails ? { id, ...details(model) } : { id, inputs: [], outputs: [] }
+}
 
 Object.assign(window, {
   litertQualification: {
     async initialize(path: string) {
       await loadLiteRt(path)
+      const gpu = (navigator as Navigator & {
+        gpu?: { requestAdapter(): Promise<GPUAdapter | null> }
+      }).gpu
+      if (gpu) {
+        const adapter = await gpu.requestAdapter()
+        if (adapter) setWebGpuDevice(await adapter.requestDevice())
+      }
+    },
+    async fetchAsset(descriptor: {
+      id: string
+      url: string
+      bytes: number
+      sha256: string
+    }) {
+      const response = await fetch(descriptor.url)
+      if (!response.ok) throw new Error(`Asset request failed: ${response.status}`)
+      const buffer = await response.arrayBuffer()
+      const verified = await verifyQualificationAsset(buffer, descriptor)
+      return Array.from(new Uint8Array(verified))
+    },
+    runModuleWorkerLoader() {
+      const worker = new Worker(
+        new URL('./module-worker-loader/worker.ts', import.meta.url),
+        { type: 'module' },
+      )
+      return new Promise<{
+        status: 'pass' | 'fail'
+        stage?: string
+        error?: { message: string }
+      }>((resolve) => {
+        worker.onmessage = (event) => {
+          worker.terminate()
+          resolve(event.data)
+        }
+        worker.onerror = (event) => {
+          worker.terminate()
+          resolve({
+            status: 'fail',
+            stage: 'worker-load',
+            error: { message: event.message || 'Module worker failed to load' },
+          })
+        }
+      })
     },
     async loadAndCompile(bytes: number[], accelerator: 'wasm' | 'webgpu') {
-      const model = await loadAndCompile(new Uint8Array(bytes), { accelerator })
-      const id = nextModelId++
-      models.set(id, model)
+      return describeAndStoreModel(await loadAndCompile(new Uint8Array(bytes), { accelerator }))
+    },
+    getSignatureDetails(id: number, signature: string) {
+      const model = models.get(id)
+      if (!model) throw new Error(`Unknown qualification model: ${id}`)
+      const runner = model.signatures[signature]
+      if (!runner) throw new Error(`Unknown LiteRT signature: ${signature}`)
+      const result = {
+        inputs: runner.getInputDetails().map((detail) => ({
+          name: detail.name,
+          shape: Array.from(detail.shape.slice(0, 16)),
+          dtype: detail.dtype,
+        })),
+        outputs: runner.getOutputDetails().map((detail) => ({
+          name: detail.name,
+          shape: Array.from(detail.shape.slice(0, 16)),
+          dtype: detail.dtype,
+        })),
+      }
+      return result
+    },
+    getModelDetails(id: number) {
+      const model = models.get(id)
+      if (!model) throw new Error(`Unknown qualification model: ${id}`)
       return {
-        id,
         inputs: model.getInputDetails().map((detail) => ({
-          shape: Array.from(detail.shape),
+          name: detail.name,
+          shape: Array.from(detail.shape.slice(0, 16)),
           dtype: detail.dtype,
         })),
         outputs: model.getOutputDetails().map((detail) => ({
-          shape: Array.from(detail.shape),
+          name: detail.name,
+          shape: Array.from(detail.shape.slice(0, 16)),
           dtype: detail.dtype,
         })),
       }
     },
-    async run(id: number, values: Float32Array[], shapes: number[][]) {
+    async runSignatureWithZeros(id: number, signature: string) {
       const model = models.get(id)
       if (!model) throw new Error(`Unknown qualification model: ${id}`)
-      const tensors = values.map((value, index) => Tensor.fromTypedArray(value, shapes[index]))
+      const runner = model.signatures[signature]
+      if (!runner) throw new Error(`Unknown LiteRT signature: ${signature}`)
+      const tensors = runner.getInputDetails().map((detail) => {
+        const length = detail.shape.reduce((size, value) => size * value, 1)
+        return Tensor.fromTypedArray(
+          createQualificationZeroTypedArray(detail.dtype, length) as any,
+          detail.shape,
+        )
+      })
       try {
-        const outputs = await model.run(tensors)
-        return outputs.map((output) => Array.from(output.toTypedArray() as Float32Array))
+        const outputs = await runner.run(tensors)
+        const outputTensors: Tensor[] = Array.isArray(outputs)
+          ? outputs
+          : Object.values(outputs) as Tensor[]
+        outputTensors.forEach((output) => output.delete())
       } finally {
         tensors.forEach((tensor) => tensor.delete())
+      }
+    },
+    async loadAndCompileAsset(
+      descriptor: ModelAssetDescriptor,
+      accelerator: 'wasm' | 'webgpu',
+    ) {
+      const response = await fetch(descriptor.url)
+      if (!response.ok) throw new Error(`Asset request failed: ${response.status}`)
+      const buffer = await response.arrayBuffer()
+      const verified = await verifyQualificationAsset(buffer, descriptor)
+      const compiled = await loadAndCompile(new Uint8Array(verified), { accelerator })
+      const result = describeAndStoreModel(
+        compiled,
+        false,
+      )
+      return result.id
+    },
+    async run(
+      id: number,
+      request: ReturnType<typeof serializeQualificationInput>,
+    ) {
+      const model = models.get(id)
+      if (!model) throw new Error(`Unknown qualification model: ${id}`)
+      const createTensor = (serialized: {
+        data: number[]
+        shape: number[]
+        dtype: 'float32' | 'int32' | 'uint8'
+      }) => Tensor.fromTypedArray(
+        createQualificationTypedArray(serialized.dtype, serialized.data) as any,
+        serialized.shape,
+      )
+      const tensors = request.input.kind === 'positional'
+        ? request.input.tensors.map(createTensor)
+        : Object.fromEntries(
+          Object.entries(request.input.tensors).map(([name, tensor]) => [name, createTensor(tensor)]),
+        )
+      const runner = request.signature ? model.signatures[request.signature] : model
+      if (!runner) throw new Error(`Unknown LiteRT signature: ${request.signature}`)
+      try {
+        const outputs = await runner.run(tensors)
+        const outputTensors = Array.isArray(outputs) ? outputs : Object.values(outputs)
+        try {
+          const serialize = (output: Tensor) => ({
+            data: Array.from(output.toTypedArray()),
+            shape: Array.from(output.type.layout.dimensions),
+            dtype: output.type.dtype,
+          })
+          return Array.isArray(outputs)
+            ? {
+              kind: 'positional' as const,
+              tensors: outputs.map(serialize),
+            }
+            : {
+              kind: 'named' as const,
+              tensors: Object.fromEntries(
+                Object.entries(outputs).map(([name, output]) => [name, serialize(output)]),
+              ),
+            }
+        } finally {
+          outputTensors.forEach((output) => output.delete())
+        }
+      } finally {
+        if (Array.isArray(tensors)) tensors.forEach((tensor) => tensor.delete())
+        else Object.values(tensors).forEach((tensor) => tensor.delete())
       }
     },
     delete(id: number) {
