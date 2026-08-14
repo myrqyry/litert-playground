@@ -15,10 +15,10 @@ export async function runQwenXnnpackPrefill(
     model = await context.runtime.loadAndCompileAsset(asset, {
       accelerator: context.requestedBackend,
     })
-    if (!model.runSignatureWithZeros) {
-      throw new Error('Browser signature execution adapter is unavailable')
+    if (!model.runWithZeros) {
+      throw new Error('Browser zero-input execution adapter is unavailable')
     }
-    await model.runSignatureWithZeros('prefill_32')
+    await model.runWithZeros()
     observation = { status: 'pass', resolvedBackend: context.requestedBackend }
   } catch (error) {
     observation = {

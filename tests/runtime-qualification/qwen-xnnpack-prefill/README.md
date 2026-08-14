@@ -1,8 +1,9 @@
 # Qwen XNNPACK prefill
 
 This case runs the smallest browserMemory Qwen graph that exposes the
-`prefill_32` signature: the immutable 255,998,768-byte `talker_int4.tflite`
+default MTP graph: the immutable 229,608,368-byte `mtp_folded_int8.tflite`
 asset from the pinned Hugging Face revision. The expected stage is prefill.
-If the current runtime passes this path, the result intentionally mismatches
-the known-limitation expectation and keeps the qualification lane red until
-the failing browserMemory graph is identified.
+The current runtime passes this standalone path, so the result intentionally
+mismatches the known-limitation expectation and keeps the qualification lane
+red until the failing browserMemory graph is identified. The talker
+`prefill_32` candidate also passed separately.

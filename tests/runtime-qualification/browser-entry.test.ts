@@ -6,4 +6,9 @@ describe('browser LiteRT bridge', () => {
     const source = await readFile(new URL('./browser-entry.ts', import.meta.url), 'utf8')
     expect(source).toContain('output.delete()')
   })
+
+  it('supports browser-side zero-input execution for large models', async () => {
+    const source = await readFile(new URL('./browser-entry.ts', import.meta.url), 'utf8')
+    expect(source).toContain('runWithZeros')
+  })
 })

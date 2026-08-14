@@ -142,6 +142,26 @@ Object.assign(window, {
         tensors.forEach((tensor) => tensor.delete())
       }
     },
+    async runWithZeros(id: number) {
+      const model = models.get(id)
+      if (!model) throw new Error(`Unknown qualification model: ${id}`)
+      const tensors = model.getInputDetails().map((detail) => {
+        const length = detail.shape.reduce((size, value) => size * value, 1)
+        return Tensor.fromTypedArray(
+          createQualificationZeroTypedArray(detail.dtype, length) as any,
+          detail.shape,
+        )
+      })
+      try {
+        const outputs = await model.run(tensors)
+        const outputTensors: Tensor[] = Array.isArray(outputs)
+          ? outputs
+          : Object.values(outputs) as Tensor[]
+        outputTensors.forEach((output) => output.delete())
+      } finally {
+        tensors.forEach((tensor) => tensor.delete())
+      }
+    },
     async loadAndCompileAsset(
       descriptor: ModelAssetDescriptor,
       accelerator: 'wasm' | 'webgpu',

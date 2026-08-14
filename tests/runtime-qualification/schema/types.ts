@@ -79,6 +79,7 @@ export interface QualificationCompiledModel {
     outputs: readonly QualificationTensorDetails[]
   }>
   runSignatureWithZeros?(signature: string): Promise<void>
+  runWithZeros?(): Promise<void>
   run(
     input: QualificationTensorInput,
     signature?: string,

@@ -37,6 +37,7 @@ interface BrowserRuntimeApi {
     outputs: Array<{ name: string; shape: number[]; dtype: 'float32' | 'int32' | 'uint8' }>
   }>
   runSignatureWithZeros(id: number, signature: string): Promise<void>
+  runWithZeros(id: number): Promise<void>
   loadAndCompileAsset(asset: ModelAssetDescriptor, accelerator: QualificationBackend): Promise<number>
   run(id: number, request: ReturnType<typeof serializeQualificationInput>): Promise<BrowserSerializedOutput>
   delete(id: number): void
@@ -184,6 +185,10 @@ function createPlaywrightLauncher(): BrowserLauncher {
         runSignatureWithZeros: (signature: string) => page.evaluate(
           ({ id, signature }) => window.litertQualification.runSignatureWithZeros(id, signature),
           { id: result.id, signature },
+        ),
+        runWithZeros: () => page.evaluate(
+          (id) => window.litertQualification.runWithZeros(id),
+          result.id,
         ),
         run: async (
           input: QualificationTensorInput,

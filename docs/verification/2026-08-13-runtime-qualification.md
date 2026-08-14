@@ -33,12 +33,14 @@ reaches the output-materialization cleanup path and Chromium reports `Target
 crashed`; this matches the limitation contract but needs a smaller upstream
 error report before any manifest claim.
 
-The real Qwen browserMemory talker descriptor is pinned to Hugging Face commit
-`0eb3b8a4714972b065c160faec6a12158caa9dc0`, with 255,998,768 bytes and SHA-256
-`e03df54e73ed1f88b2ae6d47bbf82dd64ea90a3620d753a0f3c8d6a8d60848db`. Its
-`prefill_32` run passes in this Chromium WASM environment, so it intentionally
-mismatches the known-limitation expectation. This is evidence against the
-current talker-only repro, not evidence that Qwen browserMemory is qualified.
+The real Qwen browserMemory MTP descriptor is pinned to Hugging Face commit
+`0eb3b8a4714972b065c160faec6a12158caa9dc0`, with 229,608,368 bytes and SHA-256
+`f5ab8f826e3dd68f14667af422145fe57233b445046e5ef42c01b59f82191b4b`. Its
+standalone WASM run also passes in this Chromium environment, so it
+intentionally mismatches the known-limitation expectation. The talker
+`prefill_32` candidate was tested separately and passed as well. These are
+evidence against the current standalone repros, not evidence that Qwen
+browserMemory is qualified.
 
 The headless environment reports WebGPU as unsupported, so WebGPU cases return
 `unsupported` with `BACKEND_UNAVAILABLE` instead of attempting model execution.
