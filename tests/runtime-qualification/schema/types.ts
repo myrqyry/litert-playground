@@ -49,7 +49,32 @@ export interface QualificationContext {
   requestedBackend: QualificationBackend
   environment: QualificationEnvironment
   fetchAsset(asset: ModelAssetDescriptor): Promise<ArrayBuffer>
-  runtime: unknown
+  runtime: QualificationRuntime
+}
+
+export interface QualificationRuntime {
+  initialize?(): Promise<void>
+  loadAndCompile(
+    model: Uint8Array,
+    options: { accelerator: QualificationBackend },
+  ): Promise<QualificationCompiledModel>
+}
+
+export interface QualificationCompiledModel {
+  getInputDetails(): readonly QualificationTensorDetails[]
+  getOutputDetails(): readonly QualificationTensorDetails[]
+  run(input: QualificationTensor[]): Promise<QualificationTensor[]>
+  delete(): void
+}
+
+export interface QualificationTensorDetails {
+  shape: readonly number[]
+  dtype: string
+}
+
+export interface QualificationTensor {
+  data: unknown
+  shape?: readonly number[]
 }
 
 export interface QualificationCase {

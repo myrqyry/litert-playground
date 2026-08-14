@@ -9,10 +9,26 @@ import { tinyLitertBaselineExpected } from './expected'
 export async function runTinyLitertBaseline(
   context: QualificationContext,
 ): Promise<QualificationObservation> {
-  await context.fetchAsset(asset)
-  return {
-    status: 'pass',
-    resolvedBackend: context.requestedBackend,
+  const bytes = new Uint8Array(await context.fetchAsset(asset))
+  await context.runtime.initialize?.()
+  const model = await context.runtime.loadAndCompile(bytes, {
+    accelerator: context.requestedBackend,
+  })
+  try {
+    const inputs = model.getInputDetails()
+    if (inputs.length === 0) throw new Error('Baseline model has no input tensors')
+    const inputTensors = inputs.map((input) => ({
+      data: new Float32Array(input.shape.reduce((size, value) => size * value, 1)),
+      shape: input.shape,
+    }))
+    const output = await model.run(inputTensors)
+    if (output.length === 0) throw new Error('Baseline model returned no output tensors')
+    return {
+      status: 'pass',
+      resolvedBackend: context.requestedBackend,
+    }
+  } finally {
+    model.delete()
   }
 }
 
@@ -20,8 +36,8 @@ export const tinyLitertBaselineCase: QualificationCase = {
   id: 'tiny-litert-wasm-baseline',
   description: 'A tiny valid TFLite model provides a known-good runtime baseline.',
   model: {
-    id: 'hello-world-float',
-    revision: 'a8c2ebf583a535efb550953c740fac13fdbc11a1',
+    id: 'add-10x10',
+    revision: '16d8551be578965fe194e4d75f414f48c7b4e75a',
     assets: [asset],
   },
   environments: [

@@ -1,7 +1,7 @@
 {
   "id": "model",
-  "url": "https://raw.githubusercontent.com/tensorflow/tflite-micro/a8c2ebf583a535efb550953c740fac13fdbc11a1/tensorflow/lite/micro/examples/hello_world/models/hello_world_float.tflite",
-  "bytes": 3164,
-  "sha256": "ee939863195ca37ce063b18e14fb82aa0d98db6596ba41095757f6b560da1070",
+  "url": "https://raw.githubusercontent.com/google-ai-edge/LiteRT/16d8551be578965fe194e4d75f414f48c7b4e75a/litert/js/packages/core/testdata/add_10x10.tflite",
+  "bytes": 708,
+  "sha256": "1317a76ceedc6e0a2b39c4ee2802f80b3b831b16ac96a99e48540113472aaee2",
   "mimeType": "application/octet-stream"
 }

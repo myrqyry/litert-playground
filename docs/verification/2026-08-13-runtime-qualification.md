@@ -11,11 +11,11 @@ contracts are green at the current Playground revision, but browser evidence
 for the EfficientDet, Qwen, and module-worker reproductions requires an
 explicit `pnpm qualify` run on a named browser and device.
 
-The tiny baseline descriptor is immutable and points to the TensorFlow Lite
-Micro `hello_world_float.tflite` asset at commit
-`a8c2ebf583a535efb550953c740fac13fdbc11a1`. Its measured size is 3,164 bytes
+The tiny baseline descriptor is immutable and points to the LiteRT.js core
+`add_10x10.tflite` asset at commit
+`16d8551be578965fe194e4d75f414f48c7b4e75a`. Its measured size is 708 bytes
 and its SHA-256 is
-`ee939863195ca37ce063b18e14fb82aa0d98db6596ba41095757f6b560da1070`.
+`1317a76ceedc6e0a2b39c4ee2802f80b3b831b16ac96a99e48540113472aaee2`.
 
 ## Known limitation contracts
 

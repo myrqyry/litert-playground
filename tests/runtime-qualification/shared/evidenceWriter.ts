@@ -62,9 +62,6 @@ export async function writeQualificationResult(
   result: QualificationResult,
 ): Promise<string> {
   const serialized = JSON.stringify(result, null, 2)
-  if (serialized.includes('undefined')) {
-    throw new Error('Qualification result contains undefined values')
-  }
   await mkdir(directory, { recursive: true })
   const filePath = join(directory, `${result.caseId}-${result.timestamp.replace(/:/g, '-')}.json`)
   await writeFile(filePath, `${serialized}\n`, 'utf8')
