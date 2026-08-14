@@ -11,4 +11,13 @@ describe('browser LiteRT bridge', () => {
     const source = await readFile(new URL('./browser-entry.ts', import.meta.url), 'utf8')
     expect(source).toContain('runWithZeros')
   })
+
+  it('runs the real Qwen GeneratorPhase inside the browser', async () => {
+    const source = await readFile(new URL('./browser-entry.ts', import.meta.url), 'utf8')
+    expect(source).toContain('runQwenGenerator')
+    expect(source).toContain('GeneratorPhase')
+    expect(source).toContain('createLiteRtRuntime')
+    expect(source).toContain('onTrace')
+    expect(source).not.toContain('data: tensor')
+  })
 })

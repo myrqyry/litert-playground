@@ -8,6 +8,8 @@ import type {
   QualificationSelection,
   QualificationTensor,
   QualificationTensorInput,
+  QwenGeneratorRequest,
+  QwenGeneratorRunResult,
 } from '../schema/types'
 import type { ModelAssetDescriptor } from '../schema/types'
 import { captureBrowserEnvironment } from './environment'
@@ -41,6 +43,7 @@ interface BrowserRuntimeApi {
   loadAndCompileAsset(asset: ModelAssetDescriptor, accelerator: QualificationBackend): Promise<number>
   run(id: number, request: ReturnType<typeof serializeQualificationInput>): Promise<BrowserSerializedOutput>
   delete(id: number): void
+  runQwenGenerator(request: QwenGeneratorRequest): Promise<QwenGeneratorRunResult>
 }
 
 interface BrowserSerializedTensor {
@@ -235,6 +238,10 @@ function createPlaywrightLauncher(): BrowserLauncher {
           )
           return createCompiledModel({ id: result, inputs: [], outputs: [] })
         },
+        runQwenGenerator: (request: QwenGeneratorRequest) => page.evaluate(
+          (value) => window.litertQualification.runQwenGenerator(value),
+          request,
+        ),
       }
       const fetchAsset = async (asset: ModelAssetDescriptor): Promise<ArrayBuffer> => {
         const bytes = await page.evaluate(

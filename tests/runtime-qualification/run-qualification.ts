@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { efficientDetDynamicOutputCase } from './efficientdet-dynamic-output/case'
 import { moduleWorkerLoaderCase } from './module-worker-loader/case'
 import { qwenOmniMtpStandaloneCase } from './qwen-omni-mtp-standalone/case'
+import { qwenBrowserMemoryGeneratorCase } from './qwen-browsermemory-generator/case'
 import { runBrowserQualification } from './shared/browserHarness'
 import type { QualificationBackend, QualificationResult, QualificationSelection } from './schema/types'
 import { tinyLitertBaselineCase } from './tiny-litert-baseline/case'
@@ -18,6 +19,7 @@ const cases = [
   tinyLitertBaselineCase,
   efficientDetDynamicOutputCase,
   qwenOmniMtpStandaloneCase,
+  qwenBrowserMemoryGeneratorCase,
   moduleWorkerLoaderCase,
 ]
 

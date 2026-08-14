@@ -42,6 +42,17 @@ folded MTP graph and talker `prefill_32` candidate also pass separately.
 These are component qualifications, not evidence that the composed Qwen
 browserMemory generator is qualified.
 
+The composed `qwen-browsermemory-generator` case uses the base INT4 Talker and
+the Omni FP32 MTP together through the real `GeneratorPhase` with
+`maxFrames: 1`. In Chromium 151 WASM, both graphs compile, then Talker
+prefill fails during tensor materialization with
+`litert_tensor_buffer.h:101`. The browser receipt records `embeddings` as
+`float32 [1,32,1024]`, `input_pos` as `int32 [32]`, `mask` as
+`float32 [1,1,32,1024]`, and the real `kv_cache_k_0` through
+`kv_cache_v_27` tensors as `float32` KV shapes with element counts. No tensor
+contents cross the browser boundary. This moves the known limitation to the
+composed Talker prefill seam; the standalone Omni MTP result remains a pass.
+
 The headless environment reports WebGPU as unsupported, so WebGPU cases return
 `unsupported` with `BACKEND_UNAVAILABLE` instead of attempting model execution.
 

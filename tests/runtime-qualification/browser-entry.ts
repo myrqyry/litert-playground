@@ -1,11 +1,17 @@
 import { loadAndCompile, loadLiteRt, setWebGpuDevice, Tensor } from '@litertjs/core'
+import { createLiteRtRuntime } from '../../packages/runtime-litert/src/context'
+import { GeneratorPhase } from '../../packages/qwen3-tts/src/phases/generator'
 import {
   createQualificationTypedArray,
   createQualificationZeroTypedArray,
   serializeQualificationInput,
 } from './shared/tensorBridge'
 import { verifyQualificationAsset } from './shared/assetVerification'
-import type { ModelAssetDescriptor } from './schema/types'
+import type {
+  ModelAssetDescriptor,
+  QwenGeneratorRequest,
+  QwenGeneratorRunResult,
+} from './schema/types'
 
 const models = new Map<number, Awaited<ReturnType<typeof loadAndCompile>>>()
 let nextModelId = 1
@@ -177,6 +183,55 @@ Object.assign(window, {
       )
       return result.id
     },
+    async runQwenGenerator(request: QwenGeneratorRequest): Promise<QwenGeneratorRunResult> {
+      const receipts = [] as QwenGeneratorRunResult['receipts']
+      let stage: string | undefined
+      const resolver = createQwenAssetResolver(request.assets)
+      const runtime = await createLiteRtRuntime({
+        assets: resolver,
+        backend: request.backend,
+        packageName: '@litert-playground/qwen3-tts',
+        assetBase: '/node_modules/@litertjs/core/',
+      })
+      const phase = new GeneratorPhase(request.variant, {
+        onTrace: (event) => {
+          stage = event.stage
+          receipts.push(event)
+        },
+      })
+      try {
+        stage = 'talker-compile'
+        await phase.load(runtime)
+        await phase.generate(request.text ? { text: request.text } : { text: 'Testing one two three.' }, {
+          ...request.config,
+          maxFrames: 1,
+        })
+        return {
+          observation: {
+            status: 'pass',
+            resolvedBackend: runtime.backend === 'webgpu' ? 'webgpu' : 'wasm',
+          },
+          receipts,
+        }
+      } catch (error) {
+        const cause = error as { code?: string; stage?: string; message?: string }
+        return {
+          observation: {
+            status: 'fail',
+            stage: stage ?? cause.stage,
+            error: {
+              code: cause.code,
+              stage: stage ?? cause.stage,
+              message: cause.message ?? String(error),
+            },
+          },
+          receipts,
+        }
+      } finally {
+        phase.dispose()
+        runtime.liteRt.dispose()
+      }
+    },
     async run(
       id: number,
       request: ReturnType<typeof serializeQualificationInput>,
@@ -232,3 +287,23 @@ Object.assign(window, {
     },
   },
 })
+
+function createQwenAssetResolver(assets: QwenGeneratorRequest['assets']) {
+  const byPath = new Map(assets.map((asset) => [asset.path, asset]))
+  const cache = new Map<string, Promise<ArrayBuffer>>()
+  return {
+    resolve(asset: { path: string }): Promise<ArrayBuffer> {
+      const descriptor = byPath.get(asset.path)
+      if (!descriptor) throw new Error(`Unknown Qwen asset: ${asset.path}`)
+      const existing = cache.get(asset.path)
+      if (existing) return existing
+      const pending = fetch(descriptor.url).then(async (response) => {
+        if (!response.ok) throw new Error(`Asset request failed: ${response.status}`)
+        const buffer = await response.arrayBuffer()
+        return verifyQualificationAsset(buffer, descriptor)
+      })
+      cache.set(asset.path, pending)
+      return pending
+    },
+  }
+}

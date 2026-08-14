@@ -72,9 +72,11 @@ export class GeneratorPhase {
     this.projB2 = proj['b2'];
     this.report({ phase: 'loading', step: 5, total: 7 });
     const compileStart = performance.now();
+    this.trace({ stage: 'talker-compile', phase: 'start' });
     const talkerModel = await context.liteRt.loadModel(this.variant.talker);
     this.trace({ stage: 'talker-compile', phase: 'end' });
     this.report({ phase: 'loading', step: 6, total: 7 });
+    this.trace({ stage: 'mtp-compile', phase: 'start' });
     const mtpModel = await context.liteRt.loadModel(this.variant.mtp);
     this.trace({ stage: 'mtp-compile', phase: 'end' });
     this.compileMs = performance.now() - compileStart;

@@ -1,4 +1,7 @@
 import type { InferenceDiagnostics } from '../../../packages/inference-core/src/types'
+import type { Qwen3TtsVariant } from '../../../packages/qwen3-tts/src/manifest'
+import type { QwenTtsConfig } from '../../../packages/qwen3-tts/src/types'
+import type { GeneratorTraceEvent } from '../../../packages/qwen3-tts/src/generator-trace'
 
 export type QualificationStatus = 'pass' | 'known-limitation' | 'fail' | 'unsupported'
 export type QualificationBackend = 'wasm' | 'webgpu'
@@ -30,6 +33,7 @@ export interface QualificationModel {
   id: string
   variant?: string
   revision?: string
+  revisions?: Record<string, string>
   assets: ModelAssetDescriptor[]
 }
 
@@ -45,6 +49,7 @@ export interface QualificationObservation {
   resolvedBackend?: QualificationBackend
   diagnostics?: InferenceDiagnostics
   error?: QualificationError
+  receipts?: GeneratorTraceEvent[]
 }
 
 export interface QualificationContext {
@@ -65,6 +70,7 @@ export interface QualificationRuntime {
     asset: ModelAssetDescriptor,
     options: { accelerator: QualificationBackend },
   ): Promise<QualificationCompiledModel>
+  runQwenGenerator?(request: QwenGeneratorRequest): Promise<QwenGeneratorRunResult>
 }
 
 export interface QualificationCompiledModel {
@@ -85,6 +91,23 @@ export interface QualificationCompiledModel {
     signature?: string,
   ): Promise<QualificationTensorOutput>
   delete(): Promise<void> | void
+}
+
+export interface QwenGeneratorAssetDescriptor extends ModelAssetDescriptor {
+  path: string
+}
+
+export interface QwenGeneratorRequest {
+  variant: Qwen3TtsVariant
+  assets: QwenGeneratorAssetDescriptor[]
+  backend: QualificationBackend
+  text: string
+  config: QwenTtsConfig
+}
+
+export interface QwenGeneratorRunResult {
+  observation: QualificationObservation
+  receipts: GeneratorTraceEvent[]
 }
 
 export interface QualificationTensorDetails {

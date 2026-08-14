@@ -22,13 +22,17 @@ export const qwen3TtsVariants: Record<string, Qwen3TtsVariant> = {
     id: 'browserMemory', talker: 'talker_int4.tflite', mtp: 'mtp_folded_int8.tflite', codec: 'codec_decoder_fp32.tflite',
     quantization: 'int4 talker / int8 folded mtp / fp32 codec', backendSupport: { webgpu: 'experimental', wasm: true },
   },
+  browserMemoryOmni: {
+    id: 'browserMemoryOmni', talker: 'talker_int4.tflite', mtp: 'mtp_fp32.tflite', codec: 'codec_decoder_fp32.tflite',
+    quantization: 'int4 talker / Omni fp32 mtp / fp32 codec', backendSupport: { webgpu: 'experimental', wasm: true },
+  },
 }
 
 function assetsFor(variant: Qwen3TtsVariant): ModelAsset[] {
   return [
    { id: 'tokenizer', path: 'tokenizer.json', bytes: 11_424_262 },
    { id: 'talker', path: variant.talker, bytes: variant.id === 'fp32' ? 1_783_890_064 : 255_998_768 },
-   { id: 'mtp', path: variant.mtp, bytes: variant.id === 'browserMemory' ? 229_608_368 : 440_526_692 },
+    { id: 'mtp', path: variant.mtp, bytes: variant.id === 'browserMemory' ? 229_608_368 : variant.id === 'browserMemoryOmni' ? 440_528_628 : 440_526_692 },
    { id: 'codec-decoder', path: variant.codec, bytes: 456_820_324 },
    { id: 'codec-embedding', path: 'tables/codec_embedding_fp32.npy', bytes: 12_583_040 },
    { id: 'mtp-embeddings', path: 'tables/mtp_embeddings_fp16.npy', bytes: 62_914_688 },

@@ -1,5 +1,5 @@
 import { CompiledModel, Tensor } from '@litertjs/core'
-import { traceTensor, type GeneratorTraceEvent } from './generator-trace'
+import { traceArray, traceTensor, type GeneratorTraceEvent } from './generator-trace'
 
 export interface TalkerConfig {
   /** Number of KV cache slots (64 for talker_fp32) */
@@ -63,6 +63,17 @@ export class Talker {
     kvCache: Float32Array[],
     seqLen?: number,
   ): Promise<{ kvCache: Float32Array[] }> {
+    this.trace({
+      stage: 'talker-prefill',
+      phase: 'start',
+      tensors: [
+        traceArray('embeddings', 'float32', [1, 32, this.config.hiddenDim]),
+        traceArray('input_pos', 'int32', [32]),
+        traceArray('mask', 'float32', [1, 1, 32, this.config.cacheLen]),
+        ...this.config.kvNames.map((name, index) =>
+          traceArray(name, 'float32', this.config.kvShapes[index])),
+      ],
+    })
     const inputs: Record<string, Promise<Tensor>> = {}
     for (let i = 0; i < this.config.kvNames.length; i++) {
       inputs[this.config.kvNames[i]] = toInputTensor(kvCache[i], this.config.kvShapes[i], this.config.accelerator!)
@@ -89,13 +100,6 @@ export class Talker {
     const resolved: Record<string, Tensor> = {}
     for (const [key, promise] of Object.entries(inputs)) resolved[key] = await promise
     const startedAt = performance.now()
-    this.trace({
-      stage: 'talker-prefill',
-      phase: 'start',
-      tensors: Object.entries(resolved).map(([name, tensor]) => ({
-        ...traceTensor(name, tensor),
-      })),
-    })
     const result = await this.model.run('prefill_32', resolved)
 
     const outKv: Float32Array[] = []

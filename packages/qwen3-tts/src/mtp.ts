@@ -1,6 +1,6 @@
 import { CompiledModel, Tensor } from '@litertjs/core'
 import { sample, SampleOpts } from './sampler'
-import { traceTensor, type GeneratorTraceEvent } from './generator-trace'
+import { traceArray, traceTensor, type GeneratorTraceEvent } from './generator-trace'
 
 const MTP_CACHE_SLOTS = 17
 const MTP_CODEBOOKS = 15
@@ -82,6 +82,19 @@ export class MTP {
 
       const mask = new Float32Array(this.numCacheSlots).fill(NEG_INF)
       for (let i = 0; i <= t; i++) mask[i] = 0
+
+      this.onTrace?.({
+        stage: 'mtp-input-build',
+        frame: t,
+        phase: 'start',
+        tensors: [
+          traceArray('args_0', 'float32', [1, 1, HIDDEN]),
+          traceArray('args_1', 'int32', [1]),
+          traceArray('args_2', 'float32', [1, 1, 1, this.numCacheSlots]),
+          traceArray('args_3', 'float32', this.cacheShape),
+          traceArray('args_4', 'float32', this.cacheShape),
+        ],
+      })
 
       const inputs: Record<string, Promise<Tensor>> = {
         'args_0': toInputTensor(embed, [1, 1, HIDDEN], this.accelerator),
