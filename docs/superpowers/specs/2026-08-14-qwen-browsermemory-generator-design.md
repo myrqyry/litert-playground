@@ -38,13 +38,10 @@ cross the Playwright boundary.
 
 `GeneratorPhaseOptions` gains an optional `onTrace` callback. The callback
 observes the existing generator values and does not alter tensor creation or
-execution. Trace events cover:
-
-- `prompt-built`;
-- `talker-prefill-start` and `talker-prefill-end`;
-- `talker-decode-start` and `talker-decode-end`;
-- `mtp-predict-start` and `mtp-predict-end`;
-- `state-update`.
+execution. Trace receipts cover `talker-compile`, `talker-prefill`,
+`talker-output-read`, `mtp-input-build`, `mtp-compile`, `mtp-run`,
+`mtp-output-read`, and `state-update`. Events may carry `phase: 'start'` or
+`phase: 'end'` when timing a boundary.
 
 Each event may include a frame, duration, and tensor receipts. A tensor receipt
 contains only its name, dtype, shape, and element count. It never contains
