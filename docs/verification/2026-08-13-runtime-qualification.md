@@ -33,12 +33,12 @@ reaches the output-materialization cleanup path and Chromium reports `Target
 crashed`; this matches the limitation contract but needs a smaller upstream
 error report before any manifest claim.
 
-The real Qwen browserMemory MTP descriptor is pinned to Hugging Face commit
-`0eb3b8a4714972b065c160faec6a12158caa9dc0`, with 229,608,368 bytes and SHA-256
-`f5ab8f826e3dd68f14667af422145fe57233b445046e5ef42c01b59f82191b4b`. Its
-standalone WASM run also passes in this Chromium environment, so it
-intentionally mismatches the known-limitation expectation. The talker
-`prefill_32` candidate was tested separately and passed as well. These are
+The real Qwen browserMemory MTP descriptor is now pinned to the supplied
+LiteRT-LM Omni repository at commit
+`791880469d874546d884a0e6cf68564a61c04ca9`, with 440,528,628 bytes and
+SHA-256 `7e808fb554fdf443e70e5ccdd3fdccd3cd74cdec606d3375fa4c5877d4f46e0b`.
+The standalone fast MTP graph from the base repository also passed in this
+Chromium environment, as did the talker `prefill_32` candidate. These are
 evidence against the current standalone repros, not evidence that Qwen
 browserMemory is qualified.
 

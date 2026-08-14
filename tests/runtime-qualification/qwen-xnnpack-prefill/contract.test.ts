@@ -10,8 +10,8 @@ describe('Qwen XNNPACK prefill contract', () => {
       revision: '0eb3b8a4714972b065c160faec6a12158caa9dc0',
       assets: [{
         id: 'mtp',
-        bytes: 229608368,
-        sha256: 'f5ab8f826e3dd68f14667af422145fe57233b445046e5ef42c01b59f82191b4b',
+        bytes: 440528628,
+        sha256: '7e808fb554fdf443e70e5ccdd3fdccd3cd74cdec606d3375fa4c5877d4f46e0b',
       }],
     })
     expect(qwenXnnpackPrefillCase.expected).toMatchObject({
