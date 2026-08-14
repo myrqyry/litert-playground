@@ -19,18 +19,41 @@ vi.mock('../npy-parser', () => ({
 }));
 vi.mock('../talker', () => ({
   Talker: class {
+    private onTrace?: (event: GeneratorTraceEvent) => void;
+    constructor(_model: unknown, config: { onTrace?: (event: GeneratorTraceEvent) => void } = {}) {
+      this.onTrace = config.onTrace;
+    }
     createEmptyKv = vi.fn(() => ({}));
-    prefill = vi.fn(async () => ({ logits: new Float32Array(3072), hidden: new Float32Array(1024), kvCache: {} }));
-    decode = vi.fn(async () => ({ logits: new Float32Array(3072), hidden: new Float32Array(1024), kvCache: {} }));
+    prefill = vi.fn(async () => {
+      this.onTrace?.({ stage: 'talker-prefill', phase: 'start' });
+      this.onTrace?.({ stage: 'talker-prefill', phase: 'end' });
+      this.onTrace?.({ stage: 'talker-output-read' });
+      return { logits: new Float32Array(3072), hidden: new Float32Array(1024), kvCache: {} };
+    });
+    decode = vi.fn(async () => {
+      this.onTrace?.({ stage: 'talker-output-read' });
+      return { logits: new Float32Array(3072), hidden: new Float32Array(1024), kvCache: {} };
+    });
   },
 }));
 vi.mock('../mtp', () => ({
   MTP: class {
-    predict = vi.fn(async () => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+    private onTrace?: (event: GeneratorTraceEvent) => void;
+    constructor(_model: unknown, config: { onTrace?: (event: GeneratorTraceEvent) => void } = {}) {
+      this.onTrace = config.onTrace;
+    }
+    predict = vi.fn(async () => {
+      this.onTrace?.({ stage: 'mtp-input-build' });
+      this.onTrace?.({ stage: 'mtp-run', phase: 'start' });
+      this.onTrace?.({ stage: 'mtp-run', phase: 'end' });
+      this.onTrace?.({ stage: 'mtp-output-read' });
+      return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+    });
   },
 }));
 
 import { GeneratorPhase } from './generator';
+import type { GeneratorTraceEvent } from '../generator-trace';
 import { qwen3TtsVariants } from '../manifest';
 
 function fakeModel() {
@@ -114,5 +137,26 @@ describe('GeneratorPhase', () => {
     expect(frames.frameCount).toBe(1);
     expect(frames.codebooks).toBe(16);
     expect(frames.frames).toBeInstanceOf(Uint16Array);
+  });
+
+  it('emits metadata-only receipts for the composed generator stages', async () => {
+    const trace: GeneratorTraceEvent[] = [];
+    phase = new GeneratorPhase(qwen3TtsVariants.int4, { onTrace: (event) => trace.push(event) });
+
+    await phase.load(fakeContext());
+    await phase.generate({ text: 'hello' }, { maxFrames: 1 });
+
+    expect(new Set(trace.map((event) => event.stage))).toEqual(new Set([
+      'talker-compile',
+      'talker-prefill',
+      'talker-output-read',
+      'mtp-input-build',
+      'mtp-compile',
+      'mtp-run',
+      'mtp-output-read',
+      'state-update',
+    ]));
+    expect(trace.flatMap((event) => event.tensors ?? []).every((tensor) =>
+      Object.keys(tensor).sort().join(',') === 'dtype,elementCount,name,shape')).toBe(true);
   });
 });

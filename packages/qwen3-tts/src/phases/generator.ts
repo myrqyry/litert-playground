@@ -11,6 +11,7 @@ import { discoverMtpShapes, discoverTalkerShapes } from '../shape-discovery';
 import { parseFp16Npy, type Fp16Table } from '../fp16-table';
 import { HIDDEN, CODEC_VOCAB, CODEC_EOS, NEG_INF, LANGUAGE_IDS, DEFAULTS, type QwenTtsInput, type QwenTtsConfig } from '../types';
 import { packCodecFrames, type CodecFrames } from '../codec-frames';
+import { traceArray, type GeneratorTraceEvent } from '../generator-trace';
 
 function silu(x: number): number {
   return x / (1 + Math.exp(-x));
@@ -18,6 +19,7 @@ function silu(x: number): number {
 
 export interface GeneratorPhaseOptions {
   onProgress?: (progress: PipelineProgress) => void;
+  onTrace?: (event: GeneratorTraceEvent) => void;
 }
 
 export class GeneratorPhase {
@@ -29,6 +31,7 @@ export class GeneratorPhase {
 
   private readonly variant: Qwen3TtsVariant;
   private readonly onProgress?: (progress: PipelineProgress) => void;
+  private readonly onTrace?: (event: GeneratorTraceEvent) => void;
   private context?: RuntimeContext;
   private tokenizer?: BPETokenizer;
   private talker?: Talker;
@@ -44,6 +47,7 @@ export class GeneratorPhase {
   constructor(variant: Qwen3TtsVariant, options: GeneratorPhaseOptions = {}) {
     this.variant = variant;
     this.onProgress = options.onProgress;
+    this.onTrace = options.onTrace;
     this.manifest = createQwen3TtsManifest(variant);
   }
 
@@ -69,19 +73,22 @@ export class GeneratorPhase {
     this.report({ phase: 'loading', step: 5, total: 7 });
     const compileStart = performance.now();
     const talkerModel = await context.liteRt.loadModel(this.variant.talker);
+    this.trace({ stage: 'talker-compile', phase: 'end' });
     this.report({ phase: 'loading', step: 6, total: 7 });
     const mtpModel = await context.liteRt.loadModel(this.variant.mtp);
+    this.trace({ stage: 'mtp-compile', phase: 'end' });
     this.compileMs = performance.now() - compileStart;
     const talkerShapes = discoverTalkerShapes(talkerModel);
     const mtpShapes = discoverMtpShapes(mtpModel);
     const accelerator = this.context!.backend === 'webgpu' ? 'webgpu' : 'wasm'
-    this.talker = new Talker(talkerModel, { ...talkerShapes, accelerator });
+    this.talker = new Talker(talkerModel, { ...talkerShapes, accelerator, onTrace: (event) => this.trace(event) });
     this.mtp = new MTP(mtpModel, {
       mtpEmbeddings: this.mtpEmb,
       codecEmbeddings: this.codecEmb,
       numCacheSlots: mtpShapes.cacheLen,
       cacheShape: mtpShapes.kvShape,
       accelerator,
+      onTrace: (event) => this.trace(event),
     });
     this.loadMs = performance.now() - loadStart;
   }
@@ -155,6 +162,14 @@ export class GeneratorPhase {
         currentLogits = result.logits;
         currentHidden = result.hidden;
         currentKv = result.kvCache;
+        this.trace({
+          stage: 'state-update',
+          frame,
+          tensors: [
+            traceArray('logits', 'float32', [1, CODEC_VOCAB]),
+            traceArray('hidden', 'float32', [1, HIDDEN]),
+          ],
+        });
       }
       this.inferenceMs = performance.now() - inferenceStart;
       return packCodecFrames(allFrames);
@@ -198,4 +213,9 @@ export class GeneratorPhase {
   private report(progress: PipelineProgress): void {
     this.onProgress?.(progress);
   }
+
+  private trace(event: GeneratorTraceEvent): void {
+    this.onTrace?.(event);
+  }
+
 }

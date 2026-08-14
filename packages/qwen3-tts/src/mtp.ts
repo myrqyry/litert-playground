@@ -1,5 +1,6 @@
 import { CompiledModel, Tensor } from '@litertjs/core'
 import { sample, SampleOpts } from './sampler'
+import { traceTensor, type GeneratorTraceEvent } from './generator-trace'
 
 const MTP_CACHE_SLOTS = 17
 const MTP_CODEBOOKS = 15
@@ -14,6 +15,7 @@ export interface MTPConfig {
   numCodebooks?: number
   cacheShape?: number[]
   accelerator?: 'wasm' | 'webgpu'
+  onTrace?: (event: GeneratorTraceEvent) => void
 }
 
 async function toInputTensor(data: Float32Array | Int32Array, shape: number[], accelerator: 'wasm' | 'webgpu'): Promise<Tensor> {
@@ -32,6 +34,7 @@ export class MTP {
   private numCodebooks: number
   private cacheShape: number[]
   private accelerator: 'wasm' | 'webgpu'
+  private onTrace?: (event: GeneratorTraceEvent) => void
 
   constructor(
     private model: CompiledModel,
@@ -43,6 +46,7 @@ export class MTP {
     this.numCodebooks = config.numCodebooks ?? MTP_CODEBOOKS
     this.cacheShape = config.cacheShape ?? [1, this.numCacheSlots, HIDDEN]
     this.accelerator = config.accelerator ?? 'wasm'
+    this.onTrace = config.onTrace
   }
 
   async predict(
@@ -89,10 +93,28 @@ export class MTP {
 
       const resolved: Record<string, Tensor> = {}
       for (const [key, promise] of Object.entries(inputs)) resolved[key] = await promise
+      this.onTrace?.({
+        stage: 'mtp-input-build',
+        frame: t,
+        phase: 'end',
+        tensors: Object.entries(resolved).map(([name, tensor]) => traceTensor(name, tensor)),
+      })
+      const startedAt = performance.now()
+      this.onTrace?.({ stage: 'mtp-run', frame: t, phase: 'start' })
       const result = await this.model.run(resolved)
+      this.onTrace?.({ stage: 'mtp-run', frame: t, phase: 'end', durationMs: performance.now() - startedAt })
 
       const kUpd = readFloat32(result['output_1'] as Tensor)
       const vUpd = readFloat32(result['output_2'] as Tensor)
+      this.onTrace?.({
+        stage: 'mtp-output-read',
+        frame: t,
+        tensors: [
+          traceTensor('output_0', result['output_0'] as Tensor),
+          traceTensor('output_1', result['output_1'] as Tensor),
+          traceTensor('output_2', result['output_2'] as Tensor),
+        ],
+      })
       kAll.set(kUpd)
       vAll.set(vUpd)
 

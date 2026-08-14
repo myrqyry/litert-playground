@@ -1,4 +1,5 @@
 import { CompiledModel, Tensor } from '@litertjs/core'
+import { traceTensor, type GeneratorTraceEvent } from './generator-trace'
 
 export interface TalkerConfig {
   /** Number of KV cache slots (64 for talker_fp32) */
@@ -12,6 +13,7 @@ export interface TalkerConfig {
   kvShapes: number[][]
   /** Accelerator to move input tensors to before running (matches reference) */
   accelerator?: 'wasm' | 'webgpu'
+  onTrace?: (event: GeneratorTraceEvent) => void
 }
 
 const DEFAULT_CONFIG: TalkerConfig = {
@@ -86,12 +88,26 @@ export class Talker {
 
     const resolved: Record<string, Tensor> = {}
     for (const [key, promise] of Object.entries(inputs)) resolved[key] = await promise
+    const startedAt = performance.now()
+    this.trace({
+      stage: 'talker-prefill',
+      phase: 'start',
+      tensors: Object.entries(resolved).map(([name, tensor]) => ({
+        ...traceTensor(name, tensor),
+      })),
+    })
     const result = await this.model.run('prefill_32', resolved)
 
     const outKv: Float32Array[] = []
     for (let i = 0; i < this.config.kvNames.length; i++) {
       outKv.push(readFloat32(result[this.config.kvNames[i]] as Tensor))
     }
+
+    this.trace({ stage: 'talker-prefill', phase: 'end', durationMs: performance.now() - startedAt })
+    this.trace({
+      stage: 'talker-output-read',
+      tensors: this.config.kvNames.map((name) => traceTensor(name, result[name] as Tensor)),
+    })
 
     return { kvCache: outKv }
   }
@@ -125,7 +141,18 @@ export class Talker {
     for (let i = 0; i < this.config.kvNames.length; i++) {
       outKv.push(readFloat32(result[this.config.kvNames[i]] as Tensor))
     }
+    this.trace({
+      stage: 'talker-output-read',
+      tensors: [
+        traceTensor('logits', result.logits as Tensor),
+        ...this.config.kvNames.map((name) => traceTensor(name, result[name] as Tensor)),
+      ],
+    })
 
     return { logits: cb0Logits, hidden, kvCache: outKv }
+  }
+
+  private trace(event: GeneratorTraceEvent): void {
+    this.config.onTrace?.(event)
   }
 }
