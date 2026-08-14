@@ -104,6 +104,7 @@
       "required": ["status"],
       "properties": {
         "status": { "enum": ["pass", "known-limitation", "fail", "unsupported"] },
+        "limitation": { "enum": ["resource-exhausted"] },
         "stage": { "type": "string" },
         "resolvedBackend": { "enum": ["wasm", "webgpu"] },
         "diagnostics": { "type": "object", "additionalProperties": true },

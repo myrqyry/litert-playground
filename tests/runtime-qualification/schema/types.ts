@@ -7,6 +7,7 @@ export type QualificationStatus = 'pass' | 'known-limitation' | 'fail' | 'unsupp
 export type QualificationBackend = 'wasm' | 'webgpu'
 export type QualificationEvidenceKind = 'contract' | 'browser-observation'
 export type QualificationDType = 'float32' | 'int32' | 'uint8'
+export type QualificationLimitation = 'resource-exhausted'
 
 export interface QualificationEnvironment {
   browser?: string
@@ -45,6 +46,7 @@ export interface QualificationError {
 
 export interface QualificationObservation {
   status: QualificationStatus
+  limitation?: QualificationLimitation
   stage?: string
   resolvedBackend?: QualificationBackend
   diagnostics?: InferenceDiagnostics

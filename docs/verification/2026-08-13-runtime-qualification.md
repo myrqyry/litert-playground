@@ -51,7 +51,8 @@ prefill fails during tensor materialization with
 `float32 [1,1,32,1024]`, and the real `kv_cache_k_0` through
 `kv_cache_v_27` tensors as `float32` KV shapes with element counts. No tensor
 contents cross the browser boundary. This moves the known limitation to the
-composed Talker prefill seam; the standalone Omni MTP result remains a pass.
+composed Talker prefill seam. The result is classified as `limited` with
+limitation `resource-exhausted`; the standalone Omni MTP result remains a pass.
 
 The headless environment reports WebGPU as unsupported, so WebGPU cases return
 `unsupported` with `BACKEND_UNAVAILABLE` instead of attempting model execution.

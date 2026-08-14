@@ -16,6 +16,7 @@ WASM.
 - Graph setup and real prompt construction: pass.
 - Failure stage: real Talker `prefill` tensor allocation.
 - Failure: `litert_tensor_buffer.h:101` during managed tensor materialization.
+- Qualification: `limited` with limitation `resource-exhausted`.
 - Standalone Omni MTP compile and execution: pass.
 - Evidence boundary: tensor names, dtypes, shapes, and element counts only;
   tensor contents never leave the browser.

@@ -29,6 +29,10 @@ describe('qualification result schema', () => {
     expect(schema.$defs.observation.properties.status.enum).toContain('unsupported')
   })
 
+  it('classifies the Qwen prefill ceiling as resource exhaustion', () => {
+    expect(schema.$defs.observation.properties.limitation.enum).toContain('resource-exhausted')
+  })
+
   it('requires schema version one and a case identifier', () => {
     expect(schema.properties.schemaVersion).toEqual({ const: 1 })
     expect(schema.required).toContain('caseId')

@@ -47,7 +47,12 @@ export async function runQwenBrowserMemoryGenerator(
       maxFrames: 1,
     },
   })
-  return { ...result.observation, receipts: result.receipts }
+  const message = result.observation.error?.message ?? ''
+  const limitation = result.observation.stage === 'talker-prefill'
+    && /tensor_buffer|TensorBuffer|memory|residency/i.test(message)
+    ? 'resource-exhausted' as const
+    : undefined
+  return { ...result.observation, limitation, receipts: result.receipts }
 }
 
 export const qwenBrowserMemoryGeneratorCase: QualificationCase = {
