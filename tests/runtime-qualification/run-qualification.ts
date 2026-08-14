@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { efficientDetDynamicOutputCase } from './efficientdet-dynamic-output/case'
 import { moduleWorkerLoaderCase } from './module-worker-loader/case'
-import { qwenXnnpackPrefillCase } from './qwen-xnnpack-prefill/case'
+import { qwenOmniMtpStandaloneCase } from './qwen-omni-mtp-standalone/case'
 import { runBrowserQualification } from './shared/browserHarness'
 import type { QualificationBackend, QualificationResult, QualificationSelection } from './schema/types'
 import { tinyLitertBaselineCase } from './tiny-litert-baseline/case'
@@ -17,7 +17,7 @@ export interface QualificationCliOptions {
 const cases = [
   tinyLitertBaselineCase,
   efficientDetDynamicOutputCase,
-  qwenXnnpackPrefillCase,
+  qwenOmniMtpStandaloneCase,
   moduleWorkerLoaderCase,
 ]
 

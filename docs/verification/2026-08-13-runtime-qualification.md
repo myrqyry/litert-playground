@@ -33,14 +33,14 @@ reaches the output-materialization cleanup path and Chromium reports `Target
 crashed`; this matches the limitation contract but needs a smaller upstream
 error report before any manifest claim.
 
-The real Qwen browserMemory MTP descriptor is now pinned to the supplied
-LiteRT-LM Omni repository at commit
+The standalone Omni MTP qualification is pinned to the supplied LiteRT-LM
+Omni repository at commit
 `791880469d874546d884a0e6cf68564a61c04ca9`, with 440,528,628 bytes and
 SHA-256 `7e808fb554fdf443e70e5ccdd3fdccd3cd74cdec606d3375fa4c5877d4f46e0b`.
-The standalone fast MTP graph from the base repository also passed in this
-Chromium environment, as did the talker `prefill_32` candidate. These are
-evidence against the current standalone repros, not evidence that Qwen
-browserMemory is qualified.
+Its Chromium WASM compile and default-input execution both pass. The base
+folded MTP graph and talker `prefill_32` candidate also pass separately.
+These are component qualifications, not evidence that the composed Qwen
+browserMemory generator is qualified.
 
 The headless environment reports WebGPU as unsupported, so WebGPU cases return
 `unsupported` with `BACKEND_UNAVAILABLE` instead of attempting model execution.
