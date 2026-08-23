@@ -14,6 +14,7 @@ export interface LiteRtModelOptions {
   supportedBackends?: Partial<Record<Backend, boolean | 'experimental'>>
   webNNOptions?: WebNNRuntimeOptions
   signal?: AbortSignal
+  onProgress?: (progress: { loadedBytes: number; totalBytes?: number }) => void
 }
 
 export type LiteRtTypedArray = Float32Array | Int32Array | Int8Array | Uint8Array

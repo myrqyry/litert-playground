@@ -34,6 +34,7 @@ interface UseModelRunnerReturn {
   error: string | null
   loading: boolean
   loaded: boolean
+  downloadProgress: { loadedBytes: number; totalBytes?: number } | null
 }
 
 function pageBase(): string {
@@ -77,6 +78,7 @@ export function useModelRunner(): UseModelRunnerReturn {
   const [modelInfo, setModelInfo] = useState<LiteRtModelInfo | null>(null)
   const [preflight, setPreflight] = useState<LiteRtPreflightResult | null>(null)
   const [telemetry, setTelemetry] = useState<readonly LiteRtTelemetryRecord[]>([])
+  const [downloadProgress, setDownloadProgress] = useState<{ loadedBytes: number; totalBytes?: number } | null>(null)
 
   const runtimePromiseRef = useRef<Promise<ManagedLiteRtRuntimeContext> | null>(null)
   const adapterRef = useRef<ModelAdapter | null>(null)
@@ -117,6 +119,7 @@ export function useModelRunner(): UseModelRunnerReturn {
     setPreflight(null)
     setOutputs(null)
     setOutputTensors(null)
+    setDownloadProgress(null)
 
     try {
       const runtime = await ensureRuntime()
@@ -129,6 +132,7 @@ export function useModelRunner(): UseModelRunnerReturn {
         webNNOptions: target === 'webnn' || target === 'auto'
           ? { devicePreference: 'npu', powerPreference: 'high-performance' }
           : undefined,
+        onProgress: (progress) => setDownloadProgress(progress),
       })
 
       if (requestId !== requestIdRef.current || controller.signal.aborted) return
@@ -250,5 +254,6 @@ export function useModelRunner(): UseModelRunnerReturn {
     error,
     loading,
     loaded,
+    downloadProgress,
   }
 }

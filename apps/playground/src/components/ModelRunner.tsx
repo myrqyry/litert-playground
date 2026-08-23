@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useModelRunner } from '../hooks/useModelRunner'
 import type { Accelerator } from '../hooks/useModelRunner'
 import type { ModelAdapter, TensorSpec } from '../adapters/types'
-import ModelSelector from './ModelSelector'
+import ModelList from './ModelList'
 import InputEditor from './InputEditor'
 import ImageInput from './ImageInput'
 import OutputViewer from './OutputViewer'
@@ -28,6 +28,19 @@ const ACCEL_OPTIONS: { value: Accelerator; label: string }[] = [
   { value: 'wasm', label: 'WASM (CPU)' },
 ]
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
+}
+
+function progressPercent(progress: { loadedBytes: number; totalBytes?: number } | null): number {
+  if (!progress || !progress.totalBytes) return 0
+  return Math.min(100, Math.round((progress.loadedBytes / progress.totalBytes) * 100))
+}
+
 function metric(value: number | undefined): string {
   return value === undefined ? '—' : `${Math.round(value)} ms`
 }
@@ -49,19 +62,23 @@ export default function ModelRunner({ adapters, onSelect }: ModelRunnerProps) {
     error,
     loading,
     loaded,
+    downloadProgress,
   } = useModelRunner()
   const [selectedAdapter, setSelectedAdapter] = useState<ModelAdapter | null>(null)
   const [inputValues, setInputValues] = useState<Record<string, unknown>>({})
   const [search, setSearch] = useState('')
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
 
-  const handleSelect = (adapter: ModelAdapter) => {
+  const handleSelect = async (adapter: ModelAdapter) => {
     if (onSelect && adapter.isPipeline) {
       onSelect(adapter.modelId)
       return
     }
+    setDownloadingId(adapter.modelId)
     setSelectedAdapter(adapter)
     setInputValues({})
-    void loadModel(adapter)
+    await loadModel(adapter)
+    setDownloadingId(null)
   }
 
   const handleAcceleratorChange = (next: Accelerator) => {
@@ -111,7 +128,13 @@ export default function ModelRunner({ adapters, onSelect }: ModelRunnerProps) {
           className="mb-3 w-full rounded-lg border border-outline bg-surface-container px-4 py-2 text-sm text-on-surface transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none"
         />
 
-        <ModelSelector adapters={filtered} onSelect={handleSelect} disabled={loading} />
+        <ModelList
+          adapters={filtered}
+          onSelect={handleSelect}
+          disabled={loading}
+          loadingModelId={downloadingId}
+          downloadProgress={downloadingId === selectedAdapter?.modelId ? downloadProgress : null}
+        />
 
         {error && (
           <div className="mt-3 rounded-lg bg-error-container p-3 text-sm text-on-error-container">
@@ -198,7 +221,24 @@ export default function ModelRunner({ adapters, onSelect }: ModelRunnerProps) {
         )}
 
         {selectedAdapter && !loaded && loading && (
-          <p className="mt-3 text-on-surface-variant">Loading model...</p>
+          <div className="mt-3">
+            <p className="text-on-surface-variant">Loading model...</p>
+            {downloadProgress && (
+              <div className="mt-2">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-outline/30">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-300"
+                    style={{ width: `${progressPercent(downloadProgress)}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-xs text-on-surface-variant">
+                  {formatBytes(downloadProgress.loadedBytes)}
+                  {downloadProgress.totalBytes ? ` / ${formatBytes(downloadProgress.totalBytes)}` : ''}
+                  {downloadProgress.totalBytes ? ` (${progressPercent(downloadProgress)}%)` : ''}
+                </p>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -408,6 +408,7 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
     generation: number,
   ): Promise<LoadedModel> {
     const signal = options.signal
+    const onProgress = options.onProgress
     const requestedBackend = options.accelerator ?? this.options.backend ?? 'auto'
     const supported = options.supportedBackends ?? this.options.supportedBackends ?? {}
     const candidates = rankBackends(this.capabilities, supported, requestedBackend)
@@ -418,7 +419,7 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
       })
     }
 
-    const bytes = await this.resolve(path, signal)
+    const bytes = await this.resolve(path, signal, onProgress)
     let lastError: unknown
 
     for (let index = 0; index < candidates.length; index += 1) {
@@ -603,10 +604,10 @@ class LiteRtRuntimeManager implements ManagedLiteRtRuntime {
     })
   }
 
-  private async resolve(path: string, signal?: AbortSignal): Promise<ArrayBuffer> {
+  private async resolve(path: string, signal?: AbortSignal, onProgress?: (progress: { loadedBytes: number; totalBytes?: number }) => void): Promise<ArrayBuffer> {
     const effectiveSignal = signal ?? this.options.signal
     try {
-      return await this.options.assets.resolve({ id: path, path }, { signal: effectiveSignal })
+      return await this.options.assets.resolve({ id: path, path }, { signal: effectiveSignal, onProgress })
     } catch (cause) {
       if (isAbort(cause, effectiveSignal)) {
         throw new InferenceError('CANCELLED', `Asset fetch cancelled for ${path}`, { asset: path, cause })
