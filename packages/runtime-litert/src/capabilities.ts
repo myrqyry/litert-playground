@@ -11,11 +11,15 @@ type NavigatorWithAccelerators = {
 
 function probeWasmSimd(): boolean {
   try {
-    // Minimal WASM module with a SIMD v128.const op (0xfd 0x0c). If validated, SIMD is supported.
+    // Minimal WASM module using SIMD v128.const (0xfd 0x0c). The immediate
+    // is exactly 16 bytes; undersized immediates are rejected by validate().
     return typeof WebAssembly !== 'undefined' && WebAssembly.validate(new Uint8Array([
-      0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7b,
-      0x03, 0x02, 0x01, 0x00, 0x0a, 0x0a, 0x01, 0x08, 0x00, 0xfd, 0x0c, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x0b,
+      0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,  // header
+      0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7b,        // type section (1 func, () -> i32)
+      0x03, 0x02, 0x01, 0x00,                          // function section (1 func, type 0)
+      0x0a, 0x16, 0x01, 0x14, 0x00,                    // code section (size 22: 1 func, body 20, 0 locals)
+      0xfd, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x0b,
     ]))
   } catch { return false }
 }
@@ -34,9 +38,10 @@ function probeWasmThreads(): boolean {
 
 function probeWasmJspi(): boolean {
   try {
-    // JSPI aka JSPromiseIntegration / WebAssembly.Function with promising
-    const w = WebAssembly as unknown as { Function?: unknown; promising?: unknown; JSPromise?: unknown }
-    return typeof w.Function !== 'undefined' || typeof w.promising !== 'undefined' || typeof w.JSPromise !== 'undefined'
+    // WebAssembly JSPI is exposed via WebAssembly.promising and
+    // WebAssembly.Suspending; WebAssembly.Function is not JSPI evidence.
+    const w = WebAssembly as unknown as { promising?: unknown; Suspending?: unknown }
+    return typeof w.promising === 'function' && typeof w.Suspending === 'function'
   } catch { return false }
 }
 

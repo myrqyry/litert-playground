@@ -33,3 +33,42 @@ describe('LiteRT backend selection', () => {
     expect(capabilities.webnn.available).toBe(true)
   })
 })
+
+describe('WASM capability probes', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('reports simd:true when validate accepts a SIMD module', async () => {
+    vi.stubGlobal('WebAssembly', { validate: () => true })
+    const caps = await probeRuntimeCapabilities()
+    expect(caps.wasm.simd).toBe(true)
+    expect(caps.wasm.available).toBe(true)
+  })
+
+  it('reports simd:false when validate rejects the probe module', async () => {
+    vi.stubGlobal('WebAssembly', { validate: () => false })
+    const caps = await probeRuntimeCapabilities()
+    expect(caps.wasm.simd).toBe(false)
+  })
+
+  it('reports threads:false when SharedArrayBuffer is absent', async () => {
+    vi.stubGlobal('SharedArrayBuffer', undefined as any)
+    vi.stubGlobal('WebAssembly', {
+      validate: () => true,
+      Memory: class {},
+    })
+    const caps = await probeRuntimeCapabilities()
+    expect(caps.wasm.threads).toBe(false)
+  })
+
+  it('reports jspi:true only when both promising and Suspending are functions', async () => {
+    vi.stubGlobal('WebAssembly', { promising: () => {}, Suspending: class {} })
+    const caps = await probeRuntimeCapabilities()
+    expect(caps.wasm.jspi).toBe(true)
+  })
+
+  it('reports jspi:false when only WebAssembly.Function exists', async () => {
+    vi.stubGlobal('WebAssembly', { Function: class {} })
+    const caps = await probeRuntimeCapabilities()
+    expect(caps.wasm.jspi).toBe(false)
+  })
+})

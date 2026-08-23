@@ -79,15 +79,15 @@ class MoViNetState {
     this.initialized = false;
   }
 
-  // ponytail: rollback for the transactional frame counter — a failed/aborted
-  // predict must not desync frameNum from the recurrent buffers.
-  discardFrame(): void {
-    if (this.frameNum > 0) this.frameNum--;
+  // ponytail: frameNum commits only after the whole frame succeeds — no
+  // rollback path needed.
+  commitFrame(nextFrame: number): void {
+    this.frameNum = nextFrame;
   }
 
-  async buildInputTensors(frameTensor: Tensor): Promise<Tensor[]> {
-    this.frameNum++;
-    const n = this.frameNum;
+  async buildInputTensors(frameTensor: Tensor): Promise<{ inputs: Tensor[]; nextFrame: number }> {
+    const nextFrame = this.frameNum + 1;
+    const n = nextFrame;
     const invCount = new Float32Array([1 / n]);
     const inputs: Tensor[] = [frameTensor];
 
@@ -104,7 +104,7 @@ class MoViNetState {
     inputs.push(Tensor.fromTypedArray(invCount, [1, 1, 1, 1]));
     inputs.push(Tensor.fromTypedArray(this.constant, [1, 1, 1, 1]));
 
-    return inputs;
+    return { inputs, nextFrame };
   }
 
   private allocateBuffers(): void {
@@ -182,18 +182,17 @@ export class MoViNetPipeline implements Pipeline<MoViNetInput, MoViNetPrediction
     this.status = 'running';
     const cfg = { topK: config?.topK ?? 5 };
     const inferenceStart = performance.now();
-    let frameConsumed = false;
     try {
       if (signal?.aborted) throw new Error('CANCELLED');
       const frameTensor = this.canvasToTensor(input.canvas);
-      const inputs = await this.state.buildInputTensors(frameTensor);
-      frameConsumed = true;
+      const { inputs, nextFrame } = await this.state.buildInputTensors(frameTensor);
       try {
         const rawOutput = await this.runtime.predict(this.modelUrl, inputs, { signal });
         const outputs = Array.isArray(rawOutput) ? rawOutput : Object.values(rawOutput);
         try {
           const logitsArr = new Float32Array(this.runtime.readTensor<Float32Array>(outputs[0]));
           this.state.updateState(outputs);
+          this.state.commitFrame(nextFrame);
           const probs = this.softmax(logitsArr);
           const result: MoViNetPrediction = {
             topClasses: this.topK(probs, cfg.topK),
@@ -211,7 +210,6 @@ export class MoViNetPipeline implements Pipeline<MoViNetInput, MoViNetPrediction
       }
     } catch (e) {
       this.status = 'ready';
-      if (frameConsumed) this.state.discardFrame();
       throw e;
     }
   }

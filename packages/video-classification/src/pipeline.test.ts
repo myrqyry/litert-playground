@@ -34,7 +34,7 @@ describe('MoViNetPipeline', () => {
     const spy = vi.spyOn(Tensor, 'fromTypedArray').mockImplementation(() => fakeTensor() as unknown as Tensor);
     const frame = fakeTensor() as unknown as Tensor;
     try {
-      const inputs = await state.buildInputTensors(frame);
+      const { inputs } = await state.buildInputTensors(frame);
       expect(inputs.length).toBe(47);
       expect(inputs[0]).toBe(frame);
       expect((inputs[45] as unknown as { toTypedArray(): Float32Array }).toTypedArray()[0]).toBe(1);
@@ -50,7 +50,7 @@ describe('MoViNetPipeline', () => {
     ).rejects.toThrow('Pipeline not ready');
   });
 
-  it('rolls the frame counter back when predict fails', async () => {
+  it('leaves the frame counter untouched when predict fails', async () => {
     const pipeline = new MoViNetPipeline();
     await pipeline.load(fakeContext());
     const state = (pipeline as any).state;
@@ -66,6 +66,30 @@ describe('MoViNetPipeline', () => {
     (pipeline as any).canvasToTensor = () => fakeTensor() as unknown as Tensor;
     try {
       await expect(pipeline.run({ canvas: {} as HTMLCanvasElement })).rejects.toThrow('boom');
+      expect(state.frameNum).toBe(0);
+      await pipeline.run({ canvas: {} as HTMLCanvasElement });
+      expect(state.frameNum).toBe(1);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('keeps the frame counter untouched when tensor building fails', async () => {
+    const pipeline = new MoViNetPipeline();
+    await pipeline.load(fakeContext());
+    const state = (pipeline as any).state;
+    vi.spyOn(Tensor, 'fromTypedArray')
+      .mockImplementationOnce(() => { throw new Error('tensor boom'); })
+      .mockImplementation(() => fakeTensor() as unknown as Tensor);
+    (pipeline as any).runtime = {
+      readTensor: () => new Float32Array(600),
+      predict: vi.fn(async () => Object.fromEntries(
+        Array.from({ length: 28 }, (_, i) => [String(i), fakeTensor()]),
+      )),
+    };
+    (pipeline as any).canvasToTensor = () => fakeTensor() as unknown as Tensor;
+    try {
+      await expect(pipeline.run({ canvas: {} as HTMLCanvasElement })).rejects.toThrow('tensor boom');
       expect(state.frameNum).toBe(0);
       await pipeline.run({ canvas: {} as HTMLCanvasElement });
       expect(state.frameNum).toBe(1);
