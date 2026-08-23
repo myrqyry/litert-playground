@@ -35,6 +35,8 @@ interface UseModelRunnerReturn {
   loading: boolean
   loaded: boolean
   downloadProgress: { loadedBytes: number; totalBytes?: number } | null
+  modelBase: string
+  setModelBase: (base: string) => void
 }
 
 function pageBase(): string {
@@ -79,6 +81,7 @@ export function useModelRunner(): UseModelRunnerReturn {
   const [preflight, setPreflight] = useState<LiteRtPreflightResult | null>(null)
   const [telemetry, setTelemetry] = useState<readonly LiteRtTelemetryRecord[]>([])
   const [downloadProgress, setDownloadProgress] = useState<{ loadedBytes: number; totalBytes?: number } | null>(null)
+  const [modelBase, setModelBase] = useState(pageBase())
 
   const runtimePromiseRef = useRef<Promise<ManagedLiteRtRuntimeContext> | null>(null)
   const adapterRef = useRef<ModelAdapter | null>(null)
@@ -86,18 +89,16 @@ export function useModelRunner(): UseModelRunnerReturn {
   const requestIdRef = useRef(0)
 
   const ensureRuntime = useCallback((): Promise<ManagedLiteRtRuntimeContext> => {
-    if (!runtimePromiseRef.current) {
-      runtimePromiseRef.current = createLiteRtRuntime({
-        backend: 'auto',
-        assets: createHttpAssetResolver(pageBase()),
-        telemetryLimit: 256,
-      }).catch((cause) => {
-        runtimePromiseRef.current = null
-        throw cause
-      })
-    }
-    return runtimePromiseRef.current
-  }, [])
+    runtimePromiseRef.current = null
+    return (runtimePromiseRef.current = createLiteRtRuntime({
+      backend: 'auto',
+      assets: createHttpAssetResolver(modelBase),
+      telemetryLimit: 256,
+    }).catch((cause) => {
+      runtimePromiseRef.current = null
+      throw cause
+    }))
+  }, [modelBase])
 
   const refreshRuntimeState = useCallback((runtime: ManagedLiteRtRuntimeContext, adapter: ModelAdapter, target: Accelerator) => {
     const info = runtime.liteRt.getModelInfo(adapter.metadata.modelPath, { accelerator: target }) ?? null
@@ -236,7 +237,7 @@ export function useModelRunner(): UseModelRunnerReturn {
     loadControllerRef.current?.abort()
     const runtime = runtimePromiseRef.current
     if (runtime) void runtime.then((context) => context.liteRt.dispose()).catch(() => undefined)
-  }, [])
+  }, [modelBase])
 
   return {
     loadModel,
@@ -255,5 +256,7 @@ export function useModelRunner(): UseModelRunnerReturn {
     loading,
     loaded,
     downloadProgress,
+    modelBase,
+    setModelBase,
   }
 }

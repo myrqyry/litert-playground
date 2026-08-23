@@ -63,6 +63,8 @@ export default function ModelRunner({ adapters, onSelect }: ModelRunnerProps) {
     loading,
     loaded,
     downloadProgress,
+    modelBase,
+    setModelBase,
   } = useModelRunner()
   const [selectedAdapter, setSelectedAdapter] = useState<ModelAdapter | null>(null)
   const [inputValues, setInputValues] = useState<Record<string, unknown>>({})
@@ -127,6 +129,17 @@ export default function ModelRunner({ adapters, onSelect }: ModelRunnerProps) {
           onChange={e => setSearch(e.target.value)}
           className="mb-3 w-full rounded-lg border border-outline bg-surface-container px-4 py-2 text-sm text-on-surface transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none"
         />
+
+        <div className="mb-3">
+          <label className="mb-1 block text-xs font-medium text-on-surface-variant">Model server base URL</label>
+          <input
+            type="url"
+            placeholder="https://your-model-server.com/"
+            value={modelBase}
+            onChange={e => setModelBase(e.target.value)}
+            className="w-full rounded-lg border border-outline bg-surface-container px-4 py-2 text-sm text-on-surface transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none"
+          />
+        </div>
 
         <ModelList
           adapters={filtered}
