@@ -9,10 +9,46 @@ type NavigatorWithAccelerators = {
   ml?: unknown
 }
 
+function probeWasmSimd(): boolean {
+  try {
+    // Minimal WASM module with a SIMD v128.const op (0xfd 0x0c). If validated, SIMD is supported.
+    return typeof WebAssembly !== 'undefined' && WebAssembly.validate(new Uint8Array([
+      0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7b,
+      0x03, 0x02, 0x01, 0x00, 0x0a, 0x0a, 0x01, 0x08, 0x00, 0xfd, 0x0c, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x0b,
+    ]))
+  } catch { return false }
+}
+
+function probeWasmThreads(): boolean {
+  try {
+    if (typeof SharedArrayBuffer === 'undefined') return false
+    // Threads require crossOriginIsolated + shared WebAssembly.Memory
+    if ((globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated === false) return false
+    return WebAssembly.validate(new Uint8Array([
+      0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+    ])) && typeof SharedArrayBuffer !== 'undefined'
+      && (() => { try { new WebAssembly.Memory({ initial: 1, maximum: 1, shared: true } as WebAssembly.MemoryDescriptor); return true } catch { return false } })()
+  } catch { return false }
+}
+
+function probeWasmJspi(): boolean {
+  try {
+    // JSPI aka JSPromiseIntegration / WebAssembly.Function with promising
+    const w = WebAssembly as unknown as { Function?: unknown; promising?: unknown; JSPromise?: unknown }
+    return typeof w.Function !== 'undefined' || typeof w.promising !== 'undefined' || typeof w.JSPromise !== 'undefined'
+  } catch { return false }
+}
+
 export async function probeRuntimeCapabilities(): Promise<RuntimeCapabilities> {
   const caps: RuntimeCapabilities = {
     webgpu: { available: false },
-    wasm: { available: typeof WebAssembly !== 'undefined', simd: false, threads: false, jspi: true },
+    wasm: {
+      available: typeof WebAssembly !== 'undefined',
+      simd: probeWasmSimd(),
+      threads: probeWasmThreads(),
+      jspi: probeWasmJspi(),
+    },
     webnn: { available: false, reason: 'WebNN is not exposed by this browser' },
   }
 

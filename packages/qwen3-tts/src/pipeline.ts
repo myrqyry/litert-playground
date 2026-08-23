@@ -111,12 +111,20 @@ export class Qwen3TtsPipeline {
         ]
       } else {
         const genWorker = new Worker(this.workerBase + 'generator-worker.js')
-        const gen = await runHostGenerator(genWorker, this.variant, this.modelBase, input, cfg, (p) => this.report({ ...p }))
-        genWorker.terminate()
+        let gen: Awaited<ReturnType<typeof runHostGenerator>>
+        try {
+          gen = await runHostGenerator(genWorker, this.variant, this.modelBase, input, cfg, (p) => this.report({ ...p }))
+        } finally {
+          genWorker.terminate()
+        }
 
         const decWorker = new Worker(this.workerBase + 'decoder-worker.js')
-        const dec = await runHostDecoder(decWorker, this.variant, this.modelBase, gen.frames, (p) => this.report({ ...p }))
-        decWorker.terminate()
+        let dec: Awaited<ReturnType<typeof runHostDecoder>>
+        try {
+          dec = await runHostDecoder(decWorker, this.variant, this.modelBase, gen.frames, (p) => this.report({ ...p }))
+        } finally {
+          decWorker.terminate()
+        }
 
         audio = dec.audio
         phases = [gen.phaseReceipt, dec.phaseReceipt]

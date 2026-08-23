@@ -46,10 +46,12 @@ interface PendingLoad {
 }
 
 const DEFAULT_TELEMETRY_LIMIT = 512
+// ponytail: pin @litertjs/core CDN fallback here; bump when peer dep bumps (workspace:*)
+const LITERT_CORE_CDN = 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.3/'
 
 function runtimeBase(assetBase?: string): string {
   const pageBase = (globalThis as { location?: { href: string } }).location?.href ?? 'http://localhost/'
-  return new URL(assetBase ?? 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.3/', pageBase).href
+  return new URL(assetBase ?? LITERT_CORE_CDN, pageBase).href
 }
 
 function stableOptions(value: unknown): string {
