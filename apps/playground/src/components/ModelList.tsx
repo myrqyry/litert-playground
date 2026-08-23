@@ -35,15 +35,18 @@ export default function ModelList({ adapters, onSelect, disabled, loadingModelId
             className="rounded-xl border border-outline/60 bg-surface-container p-4 text-left transition-all hover:border-primary/50 hover:shadow-md disabled:opacity-60"
           >
             <div className="flex items-start justify-between gap-2">
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-on-surface">{a.metadata.name}</p>
-                <p className="mt-1 line-clamp-2 text-xs text-on-surface-variant">{a.metadata.description}</p>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {a.metadata.tags.map(t => (
-                    <span key={t} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{t}</span>
-                  ))}
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-on-surface">{a.metadata.name}</p>
+                  <p className="mt-1 line-clamp-2 text-xs text-on-surface-variant">{a.metadata.description}</p>
+                  {a.metadata.tags.length > 0 && (
+                    <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-on-surface-variant">Task types</p>
+                  )}
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {a.metadata.tags.map(t => (
+                      <span key={t} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{t}</span>
+                    ))}
+                  </div>
                 </div>
-              </div>
               <div className="shrink-0">
                 {isLoading && downloadProgress ? (
                   <span className="text-[10px] font-medium text-primary">Downloading…</span>

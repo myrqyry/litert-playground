@@ -151,6 +151,13 @@ export default function ModelRunner({ adapters, onSelect }: ModelRunnerProps) {
                   <p className="mt-1 text-sm font-semibold text-on-surface">
                     requested {accelerator.toUpperCase()} → resolved {(resolvedAccelerator ?? 'unknown').toUpperCase()}
                   </p>
+                  {selectedAdapter.metadata.tags.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {selectedAdapter.metadata.tags.map(t => (
+                        <span key={t} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{t}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"
