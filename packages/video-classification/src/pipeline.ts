@@ -79,6 +79,12 @@ class MoViNetState {
     this.initialized = false;
   }
 
+  // ponytail: rollback for the transactional frame counter — a failed/aborted
+  // predict must not desync frameNum from the recurrent buffers.
+  discardFrame(): void {
+    if (this.frameNum > 0) this.frameNum--;
+  }
+
   async buildInputTensors(frameTensor: Tensor): Promise<Tensor[]> {
     this.frameNum++;
     const n = this.frameNum;
@@ -176,12 +182,14 @@ export class MoViNetPipeline implements Pipeline<MoViNetInput, MoViNetPrediction
     this.status = 'running';
     const cfg = { topK: config?.topK ?? 5 };
     const inferenceStart = performance.now();
+    let frameConsumed = false;
     try {
       if (signal?.aborted) throw new Error('CANCELLED');
       const frameTensor = this.canvasToTensor(input.canvas);
       const inputs = await this.state.buildInputTensors(frameTensor);
+      frameConsumed = true;
       try {
-        const rawOutput = await this.runtime.predict(this.modelUrl, inputs);
+        const rawOutput = await this.runtime.predict(this.modelUrl, inputs, { signal });
         const outputs = Array.isArray(rawOutput) ? rawOutput : Object.values(rawOutput);
         try {
           const logitsArr = new Float32Array(this.runtime.readTensor<Float32Array>(outputs[0]));
@@ -203,6 +211,7 @@ export class MoViNetPipeline implements Pipeline<MoViNetInput, MoViNetPrediction
       }
     } catch (e) {
       this.status = 'ready';
+      if (frameConsumed) this.state.discardFrame();
       throw e;
     }
   }

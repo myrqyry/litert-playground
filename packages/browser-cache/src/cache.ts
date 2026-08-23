@@ -1,5 +1,5 @@
 import {
-  InferenceError,
+  verifyAssetIntegrity,
   type AssetRequestOptions,
   type AssetResolver,
   type ModelAsset,
@@ -85,17 +85,6 @@ function assetFromManifest(manifest: ModelManifest, asset: ModelAsset): ModelAss
   return manifest.assets.find((candidate) => candidate.id === asset.id) ?? asset
 }
 
-function verifySize(asset: ModelAsset, value: ArrayBuffer): ArrayBuffer {
-  if (asset.bytes !== undefined && value.byteLength !== asset.bytes) {
-    throw new InferenceError(
-      'ASSET_INTEGRITY_FAILED',
-      `${asset.id}: expected ${asset.bytes} bytes, received ${value.byteLength}`,
-      { asset: asset.id, stage: 'assets' },
-    )
-  }
-  return value
-}
-
 export function createBrowserCacheAssetResolver(
   options: BrowserCacheResolverOptions,
 ): BrowserCacheAssetResolver {
@@ -137,9 +126,9 @@ export function createBrowserCacheAssetResolver(
     } catch {
       store = unavailableStore()
     }
-    if (cached !== undefined) return verifySize(manifestAsset, cached)
+    if (cached !== undefined) return verifyAssetIntegrity(manifestAsset, cached)
 
-    const fresh = verifySize(manifestAsset, await options.inner.resolve(asset, requestOptions))
+    const fresh = await verifyAssetIntegrity(manifestAsset, await options.inner.resolve(asset, requestOptions))
     if (generation(key) === startedGeneration) {
       try {
         await store.write(key, fresh)

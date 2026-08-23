@@ -78,10 +78,9 @@ export class EncoderPipeline implements Pipeline<EncoderInput, EncoderResult, En
     try {
       this.report({ phase: 'loading-tokenizer', step: 1, total: 3 })
       const transformers = (await import('@huggingface/transformers')) as unknown as TransformersModule
-      const tokenizerAsset = this.manifest.assets.find((a) => a.id === 'tokenizer')
-      this.tokenizer = await transformers.AutoTokenizer.from_pretrained(tokenizerAsset?.path ?? '', {
-        subfolder: this.manifest.assets[0].path.split('/').slice(0, 2).join('/'),
-      })
+      // ponytail: repo id is the first two path segments of any asset URL
+      const repoId = this.manifest.assets[0].path.split('/').slice(0, 2).join('/')
+      this.tokenizer = await transformers.AutoTokenizer.from_pretrained(repoId)
       this.report({ phase: 'loading-model', step: 2, total: 3 })
       const modelPath = this.manifest.assets[0].path
       this.model = (await context.liteRt.loadModel(modelPath)) as CompiledModel

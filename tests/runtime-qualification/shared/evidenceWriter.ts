@@ -30,7 +30,11 @@ export function matchQualificationExpectation(
   observed: QualificationObservation,
 ): boolean {
   if (expected.status === 'pass') return observed.status === 'pass'
-  if (observed.status !== 'fail') return false
+  // ponytail: expected known-limitation accepts both the raw failure and a
+  // promoted observation; everything else must match exactly.
+  const statusMatches = observed.status === 'fail'
+    || (expected.status === 'known-limitation' && observed.status === 'known-limitation')
+  if (!statusMatches) return false
 
   const expectedError = expected.error
   if (!expectedError) return true

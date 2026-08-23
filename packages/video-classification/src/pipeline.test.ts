@@ -49,4 +49,28 @@ describe('MoViNetPipeline', () => {
       pipeline.run({ canvas: {} as HTMLCanvasElement }),
     ).rejects.toThrow('Pipeline not ready');
   });
+
+  it('rolls the frame counter back when predict fails', async () => {
+    const pipeline = new MoViNetPipeline();
+    await pipeline.load(fakeContext());
+    const state = (pipeline as any).state;
+    vi.spyOn(Tensor, 'fromTypedArray').mockImplementation(() => fakeTensor() as unknown as Tensor);
+    (pipeline as any).runtime = {
+      readTensor: () => new Float32Array(600),
+      predict: vi.fn()
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValueOnce(Object.fromEntries(
+          Array.from({ length: 28 }, (_, i) => [String(i), fakeTensor()]),
+        )),
+    };
+    (pipeline as any).canvasToTensor = () => fakeTensor() as unknown as Tensor;
+    try {
+      await expect(pipeline.run({ canvas: {} as HTMLCanvasElement })).rejects.toThrow('boom');
+      expect(state.frameNum).toBe(0);
+      await pipeline.run({ canvas: {} as HTMLCanvasElement });
+      expect(state.frameNum).toBe(1);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
 });

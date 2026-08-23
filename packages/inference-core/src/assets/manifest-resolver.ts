@@ -36,7 +36,7 @@ async function sha256(buffer: ArrayBuffer): Promise<string> {
   return Array.from(digest, (value) => value.toString(16).padStart(2, '0')).join('')
 }
 
-async function verify(asset: ModelAsset, buffer: ArrayBuffer): Promise<ArrayBuffer> {
+export async function verifyAssetIntegrity(asset: ModelAsset, buffer: ArrayBuffer): Promise<ArrayBuffer> {
   if (asset.bytes !== undefined && buffer.byteLength !== asset.bytes) {
     throw new InferenceError(
       'ASSET_INTEGRITY_FAILED',
@@ -65,12 +65,12 @@ export function createManifestVerifyingAssetResolver(
 ): AssetResolver {
   return {
     async resolve(asset: ModelAsset, options?: AssetRequestOptions): Promise<ArrayBuffer> {
-      return verify(assetFromManifest(manifest, asset), await inner.resolve(asset, options))
+      return verifyAssetIntegrity(assetFromManifest(manifest, asset), await inner.resolve(asset, options))
     },
 
     stream: inner.stream
       ? async (asset: ModelAsset, options?: AssetRequestOptions): Promise<ReadableStream<Uint8Array>> => {
-          const verified = await verify(
+          const verified = await verifyAssetIntegrity(
             assetFromManifest(manifest, asset),
             await bytesFromStream(await inner.stream!(asset, options)),
           )

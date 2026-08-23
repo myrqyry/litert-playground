@@ -75,8 +75,15 @@ export class InferenceCoordinator {
     return run
   }
 
+  // ponytail: one bad listener must not poison the inference it observes.
   private emit(event: InferenceEvent, details: InferenceEventDetails): void {
-    this.listeners.get(event)?.forEach((listener) => listener(details))
+    this.listeners.get(event)?.forEach((listener) => {
+      try {
+        listener(details)
+      } catch (error) {
+        console.error(`inference ${event} listener failed`, error)
+      }
+    })
   }
 }
 

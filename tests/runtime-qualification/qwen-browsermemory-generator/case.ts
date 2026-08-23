@@ -52,7 +52,14 @@ export async function runQwenBrowserMemoryGenerator(
     && /tensor_buffer|TensorBuffer|memory|residency/i.test(message)
     ? 'resource-exhausted' as const
     : undefined
-  return { ...result.observation, limitation, receipts: result.receipts }
+  return {
+    ...result.observation,
+    status: limitation === 'resource-exhausted' && result.observation.status === 'fail'
+      ? ('known-limitation' as const)
+      : result.observation.status,
+    limitation,
+    receipts: result.receipts,
+  }
 }
 
 export const qwenBrowserMemoryGeneratorCase: QualificationCase = {

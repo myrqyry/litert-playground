@@ -48,3 +48,24 @@ describe('InferenceCoordinator', () => {
     expect(coordinator.snapshot().queued).toBe(0)
   })
 })
+
+describe('InferenceCoordinator listener isolation', () => {
+  it.each(['queued', 'started', 'finished'] as const)(
+    'a throwing %s listener does not break inference or sibling listeners',
+    async (event) => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        const coordinator = new InferenceCoordinator()
+        const seen: string[] = []
+        coordinator.on(event, () => { throw new Error('listener boom') })
+        coordinator.on(event, () => { seen.push('ok') })
+
+        await expect(coordinator.run(async () => 'result', undefined, 'job')).resolves.toBe('result')
+        expect(seen).toEqual([event === 'finished' ? 'ok' : expect.any(String)])
+        expect(errorSpy).toHaveBeenCalled()
+      } finally {
+        errorSpy.mockRestore()
+      }
+    },
+  )
+})

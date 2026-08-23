@@ -138,6 +138,27 @@ describe('browser cache asset resolver', () => {
     expect(http).not.toHaveBeenCalled()
   })
 
+  it('rejects a cached buffer with the right size but a wrong hash', async () => {
+    const values = new Map<string, ArrayBuffer>()
+    const http = vi.fn(async () => buffer(1, 2, 3))
+    const resolver = createBrowserCacheAssetResolver({
+      modelId: 'demo-model',
+      revision: 'rev-a',
+      manifest: {
+        ...manifest,
+        assets: [{ ...asset(), sha256: 'deadbeef' }],
+      },
+      inner: innerResolver(http),
+      store: storeWith(values),
+    })
+    values.set(resolver.cacheKey({ ...asset(), sha256: 'deadbeef' }), buffer(4, 5, 6))
+
+    await expect(resolver.resolve(asset())).rejects.toMatchObject({
+      code: 'ASSET_INTEGRITY_FAILED',
+    })
+    expect(http).not.toHaveBeenCalled()
+  })
+
   it('does not repopulate an invalidated entry from stale async work', async () => {
     const values = new Map<string, ArrayBuffer>()
     let release!: (value: ArrayBuffer) => void

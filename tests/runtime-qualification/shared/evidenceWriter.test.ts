@@ -43,6 +43,30 @@ describe('qualification evidence', () => {
     expect(matchQualificationExpectation(expected, observed)).toBe(true)
   })
 
+  it('matches a promoted known-limitation observation', () => {
+    const expected: QualificationCase['expected'] = {
+      status: 'known-limitation',
+      error: {
+        code: 'RESOURCE_EXHAUSTED',
+        stage: 'talker-prefill',
+        messagePattern: 'TensorBuffer',
+      },
+    }
+    const observed: QualificationObservation = {
+      status: 'known-limitation',
+      stage: 'talker-prefill',
+      limitation: 'resource-exhausted',
+      error: {
+        code: 'RESOURCE_EXHAUSTED',
+        stage: 'talker-prefill',
+        message: 'TensorBuffer allocation failed',
+      },
+    }
+
+    expect(matchQualificationExpectation(expected, observed)).toBe(true)
+    expect(matchQualificationExpectation({ status: 'fail' }, observed)).toBe(false)
+  })
+
   it('does not treat an upstream fix as a known limitation match', () => {
     expect(matchQualificationExpectation(
       { status: 'known-limitation' },
