@@ -88,16 +88,18 @@ export function useModelRunner(): UseModelRunnerReturn {
   const loadControllerRef = useRef<AbortController | null>(null)
   const requestIdRef = useRef(0)
 
-  const ensureRuntime = useCallback((): Promise<ManagedLiteRtRuntimeContext> => {
-    runtimePromiseRef.current = null
-    return (runtimePromiseRef.current = createLiteRtRuntime({
-      backend: 'auto',
-      assets: createHttpAssetResolver(modelBase),
-      telemetryLimit: 256,
-    }).catch((cause) => {
-      runtimePromiseRef.current = null
-      throw cause
-    }))
+  const ensureRuntime = useCallback(() => {
+    if (!runtimePromiseRef.current) {
+      runtimePromiseRef.current = createLiteRtRuntime({
+        backend: 'auto',
+        assets: createHttpAssetResolver(modelBase),
+        telemetryLimit: 256,
+      }).catch((cause) => {
+        runtimePromiseRef.current = null
+        throw cause
+      })
+    }
+    return runtimePromiseRef.current
   }, [modelBase])
 
   const refreshRuntimeState = useCallback((runtime: ManagedLiteRtRuntimeContext, adapter: ModelAdapter, target: Accelerator) => {
@@ -232,11 +234,14 @@ export function useModelRunner(): UseModelRunnerReturn {
     }
   }, [accelerator, ensureRuntime, refreshRuntimeState])
 
-  useEffect(() => () => {
-    requestIdRef.current += 1
-    loadControllerRef.current?.abort()
-    const runtime = runtimePromiseRef.current
-    if (runtime) void runtime.then((context) => context.liteRt.dispose()).catch(() => undefined)
+  useEffect(() => {
+    return () => {
+      requestIdRef.current += 1
+      loadControllerRef.current?.abort()
+      const runtime = runtimePromiseRef.current
+      runtimePromiseRef.current = null
+      if (runtime) void runtime.then((context) => context.liteRt.dispose()).catch(() => undefined)
+    }
   }, [modelBase])
 
   return {

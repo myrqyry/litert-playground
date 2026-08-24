@@ -6,6 +6,8 @@ interface ModelListProps {
   disabled?: boolean
   loadingModelId?: string | null
   downloadProgress?: { loadedBytes: number; totalBytes?: number } | null
+  selectedModelId?: string | null
+  isModelLoaded?: boolean
 }
 
 function formatBytes(bytes: number): string {
@@ -21,12 +23,12 @@ function progressPercent(progress: { loadedBytes: number; totalBytes?: number } 
   return Math.min(100, Math.round((progress.loadedBytes / progress.totalBytes) * 100))
 }
 
-export default function ModelList({ adapters, onSelect, disabled, loadingModelId, downloadProgress }: ModelListProps) {
+export default function ModelList({ adapters, onSelect, disabled, loadingModelId, downloadProgress, selectedModelId, isModelLoaded }: ModelListProps) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {adapters.map(a => {
         const isLoading = loadingModelId === a.modelId && disabled
-        const isLoaded = loadingModelId === a.modelId && !disabled && !downloadProgress
+        const isSelectedLoaded = selectedModelId === a.modelId && isModelLoaded
         return (
           <button
             key={a.modelId}
@@ -35,23 +37,23 @@ export default function ModelList({ adapters, onSelect, disabled, loadingModelId
             className="rounded-xl border border-outline/60 bg-surface-container p-4 text-left transition-all hover:border-primary/50 hover:shadow-md disabled:opacity-60"
           >
             <div className="flex items-start justify-between gap-2">
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-on-surface">{a.metadata.name}</p>
-                  <p className="mt-1 line-clamp-2 text-xs text-on-surface-variant">{a.metadata.description}</p>
-                  {a.metadata.tags.length > 0 && (
-                    <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-on-surface-variant">Task types</p>
-                  )}
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {a.metadata.tags.map(t => (
-                      <span key={t} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{t}</span>
-                    ))}
-                  </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-on-surface">{a.metadata.name}</p>
+                <p className="mt-1 line-clamp-2 text-xs text-on-surface-variant">{a.metadata.description}</p>
+                {a.metadata.tags.length > 0 && (
+                  <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-on-surface-variant">Task types</p>
+                )}
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {a.metadata.tags.map(t => (
+                    <span key={t} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{t}</span>
+                  ))}
                 </div>
+              </div>
               <div className="shrink-0">
-                {isLoading && downloadProgress ? (
-                  <span className="text-[10px] font-medium text-primary">Downloading…</span>
-                ) : isLoaded ? (
+                {isSelectedLoaded ? (
                   <span className="text-[10px] font-medium text-green-600">Ready</span>
+                ) : isLoading && downloadProgress ? (
+                  <span className="text-[10px] font-medium text-primary">Downloading…</span>
                 ) : (
                   <span className="text-[10px] font-medium text-on-surface-variant">Download</span>
                 )}

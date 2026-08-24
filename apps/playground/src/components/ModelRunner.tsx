@@ -147,6 +147,8 @@ export default function ModelRunner({ adapters, onSelect }: ModelRunnerProps) {
           disabled={loading}
           loadingModelId={downloadingId}
           downloadProgress={downloadingId === selectedAdapter?.modelId ? downloadProgress : null}
+          selectedModelId={selectedAdapter?.modelId ?? null}
+          isModelLoaded={loaded && selectedAdapter !== null}
         />
 
         {error && (
