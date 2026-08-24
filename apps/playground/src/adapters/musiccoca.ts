@@ -10,6 +10,7 @@ export const audioPreprocessor: ModelAdapter = {
     modelPath: '/models/audio_preprocessor.tflite',
     tags: ['musiccoca', 'audio'],
   },
+  disabled: true, // ponytail: musiccoca on Kaggle only — no HF browser mirror — needs locating
   inputSpecs: [{
     name: 'waveform',
     dtype: 'float32',
@@ -43,6 +44,7 @@ export const musicEncoder: ModelAdapter = {
     modelPath: '/models/music_encoder.tflite',
     tags: ['musiccoca', 'audio', 'embedding'],
   },
+  disabled: true, // ponytail: musiccoca on Kaggle only — no HF browser mirror — needs locating
   inputSpecs: [{
     name: 'features',
     dtype: 'float32',
@@ -75,6 +77,7 @@ export const textEncoder: ModelAdapter = {
     modelPath: '/models/text_encoder.tflite',
     tags: ['musiccoca', 'text', 'embedding'],
   },
+  disabled: true, // ponytail: musiccoca on Kaggle only — no HF browser mirror — needs locating
   inputSpecs: [
     {
       name: 'ids',
@@ -122,6 +125,7 @@ export const mapper: ModelAdapter = {
     modelPath: '/models/mapper.tflite',
     tags: ['musiccoca', 'projection'],
   },
+  disabled: true, // ponytail: musiccoca on Kaggle only — no HF browser mirror — needs locating
   inputSpecs: [
     {
       name: 'input_a',
@@ -167,6 +171,7 @@ export const quantizer: ModelAdapter = {
     modelPath: '/models/pretrained_vector_quantizer.tflite',
     tags: ['musiccoca', 'quantization'],
   },
+  disabled: true, // ponytail: musiccoca on Kaggle only — no HF browser mirror — needs locating
   inputSpecs: [{
     name: 'embedding',
     dtype: 'float32',

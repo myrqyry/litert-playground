@@ -26,4 +26,6 @@ export interface ModelAdapter {
   prepareInputs(values: Record<string, any>): Record<string, import('@litertjs/core').Tensor>
   parseOutputs(outputs: Record<string, import('@litertjs/core').Tensor>): Promise<Record<string, any>>
   isPipeline?: true
+  /** ponytail: no browser-fetchable .tflite yet (verify via HEAD 200 CORS *). UI disables the entry. */
+  disabled?: boolean
 }

@@ -7,7 +7,7 @@ const outSpec = (n: string, s: number[], d: 'float32' | 'int32', desc: string) =
 
 export const headpose6drepnetAdapter: ModelAdapter = {
   modelId: '6drepnet',
-  metadata: { name: '6DRepNet — Head Pose', description: '6D head pose estimation (Euler angles)', modelPath: '/models/6drepnet/6drepnet.tflite', tags: ['vision', 'pose'] },
+  metadata: { name: '6DRepNet — Head Pose', description: '6D head pose estimation (Euler angles)', modelPath: 'https://huggingface.co/litert-community/6DRepNet-HeadPose-LiteRT/resolve/main/6drepnet.tflite', tags: ['vision', 'pose'] },
   inputSpecs: [inpSpec('input', [1, 3, 224, 224], 'float32', 'RGB ImageNet-normalized NCHW')],
   outputSpecs: [outSpec('output', [6], 'float32', '6D rotation vector → Gram-Schmidt → Euler')],
   prepareInputs: (v) => ({}),
@@ -16,7 +16,9 @@ export const headpose6drepnetAdapter: ModelAdapter = {
 
 export const blazeFaceAdapter: ModelAdapter = {
   modelId: 'blaze-face',
-  metadata: { name: 'BlazeFace — Face Detection', description: 'MediaPipe face detection (full-range)', modelPath: '/models/blaze-face/blaze_face_full_range.tflite', tags: ['vision', 'face'] },
+  // ponytail: no browser-fetchable .tflite found (not in HF vision collection; HEAD 401). Disable until located.
+  disabled: true,
+  metadata: { name: 'BlazeFace — Face Detection', description: 'MediaPipe face detection (full-range) — needs locating', modelPath: '/models/blaze-face/blaze_face_full_range.tflite', tags: ['vision', 'face'] },
   inputSpecs: [inpSpec('input', [1, 128, 128, 3], 'float32', 'RGB 0-255 NHWC')],
   outputSpecs: [
     outSpec('regressors', [1, 896, 16], 'float32', 'Bounding box + 6 keypoint regressors'),
@@ -28,7 +30,7 @@ export const blazeFaceAdapter: ModelAdapter = {
 
 export const yoloxAdapter: ModelAdapter = {
   modelId: 'yolox',
-  metadata: { name: 'YOLOX-M — Object Detection', description: 'YOLOX-M COCO detection (640×640)', modelPath: '/models/yolox/yolox_m.tflite', tags: ['vision', 'detection'] },
+  metadata: { name: 'YOLOX-M — Object Detection', description: 'YOLOX-M COCO detection (640×640)', modelPath: 'https://huggingface.co/litert-community/yolox-m-litert/resolve/main/yolox_m.tflite', tags: ['vision', 'detection'] },
   inputSpecs: [inpSpec('images', [1, 640, 640, 3], 'float32', 'BGR 0-255 NHWC, letterbox pad 114')],
   outputSpecs: [outSpec('output', [1, 8400, 85], 'float32', 'Raw heads: 4 box + 1 obj + 80 class')],
   prepareInputs: (v) => ({}),
@@ -37,7 +39,7 @@ export const yoloxAdapter: ModelAdapter = {
 
 export const u2netAdapter: ModelAdapter = {
   modelId: 'u2net',
-  metadata: { name: 'U2-Net — Portrait Sketch', description: 'Photo to pencil line drawing', modelPath: '/models/u2net/portrait.tflite', tags: ['vision', 'creative'] },
+  metadata: { name: 'U2-Net — Portrait Sketch', description: 'Photo to pencil line drawing', modelPath: 'https://huggingface.co/litert-community/U2Net-Portrait-Sketch-LiteRT/resolve/main/portrait.tflite', tags: ['vision', 'creative'] },
   inputSpecs: [inpSpec('input', [1, 3, 512, 512], 'float32', 'RGB ImageNet-normalized NCHW')],
   outputSpecs: [outSpec('output', [1, 1, 512, 512], 'float32', 'Sketch map [0,1], invert for dark-on-white')],
   prepareInputs: (v) => ({}),
@@ -46,7 +48,7 @@ export const u2netAdapter: ModelAdapter = {
 
 export const edsrAdapter: ModelAdapter = {
   modelId: 'edsr',
-  metadata: { name: 'EDSR ×4 — Super Resolution', description: '4× super resolution (128→512)', modelPath: '/models/edsr/edsr.tflite', tags: ['vision', 'enhancement'] },
+  metadata: { name: 'EDSR ×4 — Super Resolution', description: '4× super resolution (128→512)', modelPath: 'https://huggingface.co/litert-community/EDSR-x4-LiteRT/resolve/main/edsr.tflite', tags: ['vision', 'enhancement'] },
   inputSpecs: [inpSpec('input', [1, 3, 128, 128], 'float32', 'RGB x/255 NCHW')],
   outputSpecs: [outSpec('output', [1, 3, 512, 512], 'float32', 'RGB 0-1 NCHW, clamp ×255')],
   prepareInputs: (v) => ({}),
@@ -55,7 +57,7 @@ export const edsrAdapter: ModelAdapter = {
 
 export const miganAdapter: ModelAdapter = {
   modelId: 'migan',
-  metadata: { name: 'MI-GAN — Image Inpainting', description: 'Object removal / image inpainting (512×512)', modelPath: '/models/migan/migan_fp16.tflite', tags: ['vision', 'inpainting'] },
+  metadata: { name: 'MI-GAN — Image Inpainting', description: 'Object removal / image inpainting (512×512)', modelPath: 'https://huggingface.co/litert-community/MI-GAN-512-Places2-LiteRT/resolve/main/migan_fp16.tflite', tags: ['vision', 'inpainting'] },
   inputSpecs: [inpSpec('input', [1, 4, 512, 512], 'float32', 'concat(mask-0.5, rgb·mask) NCHW')],
   outputSpecs: [outSpec('output', [1, 3, 512, 512], 'float32', 'Inpainted RGB [-1,1] NCHW')],
   prepareInputs: (v) => ({}),
@@ -68,10 +70,10 @@ const sharedStyleSpecs = {
 }
 
 export const styleAdapters: ModelAdapter[] = [
-  { modelId: 'style-candy', metadata: { name: 'Neural Style — Candy', description: 'Fast Neural Style Transfer (candy)', modelPath: '/models/neural-style/style_candy_fp16.tflite', tags: ['vision', 'creative'] }, ...sharedStyleSpecs, prepareInputs: (v) => ({}), parseOutputs: async (o) => ({}) },
-  { modelId: 'style-mosaic', metadata: { name: 'Neural Style — Mosaic', description: 'Fast Neural Style Transfer (mosaic)', modelPath: '/models/neural-style/style_mosaic_fp16.tflite', tags: ['vision', 'creative'] }, ...sharedStyleSpecs, prepareInputs: (v) => ({}), parseOutputs: async (o) => ({}) },
-  { modelId: 'style-rain-princess', metadata: { name: 'Neural Style — Rain Princess', description: 'Fast Neural Style Transfer (rain princess)', modelPath: '/models/neural-style/style_rain_princess_fp16.tflite', tags: ['vision', 'creative'] }, ...sharedStyleSpecs, prepareInputs: (v) => ({}), parseOutputs: async (o) => ({}) },
-  { modelId: 'style-udnie', metadata: { name: 'Neural Style — Udnie', description: 'Fast Neural Style Transfer (udnie)', modelPath: '/models/neural-style/style_udnie_fp16.tflite', tags: ['vision', 'creative'] }, ...sharedStyleSpecs, prepareInputs: (v) => ({}), parseOutputs: async (o) => ({}) },
+  { modelId: 'style-candy', metadata: { name: 'Neural Style — Candy', description: 'Fast Neural Style Transfer (candy)', modelPath: 'https://huggingface.co/litert-community/Fast-Neural-Style-LiteRT/resolve/main/style_candy_fp16.tflite', tags: ['vision', 'creative'] }, ...sharedStyleSpecs, prepareInputs: (v) => ({}), parseOutputs: async (o) => ({}) },
+  { modelId: 'style-mosaic', metadata: { name: 'Neural Style — Mosaic', description: 'Fast Neural Style Transfer (mosaic)', modelPath: 'https://huggingface.co/litert-community/Fast-Neural-Style-LiteRT/resolve/main/style_mosaic_fp16.tflite', tags: ['vision', 'creative'] }, ...sharedStyleSpecs, prepareInputs: (v) => ({}), parseOutputs: async (o) => ({}) },
+  { modelId: 'style-rain-princess', metadata: { name: 'Neural Style — Rain Princess', description: 'Fast Neural Style Transfer (rain princess)', modelPath: 'https://huggingface.co/litert-community/Fast-Neural-Style-LiteRT/resolve/main/style_rain_princess_fp16.tflite', tags: ['vision', 'creative'] }, ...sharedStyleSpecs, prepareInputs: (v) => ({}), parseOutputs: async (o) => ({}) },
+  { modelId: 'style-udnie', metadata: { name: 'Neural Style — Udnie', description: 'Fast Neural Style Transfer (udnie)', modelPath: 'https://huggingface.co/litert-community/Fast-Neural-Style-LiteRT/resolve/main/style_udnie_fp16.tflite', tags: ['vision', 'creative'] }, ...sharedStyleSpecs, prepareInputs: (v) => ({}), parseOutputs: async (o) => ({}) },
 ]
 
 export const visionAdapters: ModelAdapter[] = [

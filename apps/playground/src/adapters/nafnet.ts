@@ -26,7 +26,7 @@ export const nafnetAdapter: ModelAdapter = {
   metadata: {
     name: 'NAFNet SIDD width32',
     description: 'Image denoising (SIDD benchmark)',
-    modelPath: '/models/nafnet_sidd_width32_fp16.tflite',
+    modelPath: 'https://huggingface.co/litert-community/NAFNet-SIDD-width32-LiteRT/resolve/main/nafnet_sidd_width32_fp16.tflite',
     tags: ['vision', 'denoising'],
   },
   inputSpecs: INPUT_SPECS,

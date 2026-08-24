@@ -26,7 +26,7 @@ export const dinov2Adapter: ModelAdapter = {
   metadata: {
     name: 'DINOv2 ViT-S/14',
     description: 'Vision Transformer patch embeddings (384-dim)',
-    modelPath: '/models/dinov2_s_fp16.tflite',
+    modelPath: 'https://huggingface.co/litert-community/DINOv2-ViT-S14-LiteRT/resolve/main/dinov2_s_fp16.tflite',
     tags: ['vision', 'embeddings'],
   },
   inputSpecs: INPUT_SPECS,

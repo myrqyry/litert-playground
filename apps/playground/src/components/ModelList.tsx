@@ -27,13 +27,15 @@ export default function ModelList({ adapters, onSelect, disabled, loadingModelId
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {adapters.map(a => {
-        const isLoading = loadingModelId === a.modelId && disabled
+        const isLoading = loadingModelId === a.modelId && !!disabled
         const isSelectedLoaded = selectedModelId === a.modelId && isModelLoaded
+        const isUnavailable = !!a.disabled
         return (
           <button
             key={a.modelId}
-            onClick={() => !isLoading && onSelect(a)}
-            disabled={disabled && !isLoading}
+            onClick={() => !isLoading && !isUnavailable && onSelect(a)}
+            disabled={isUnavailable || (!!disabled && !isLoading)}
+            title={isUnavailable ? 'No browser-fetchable .tflite yet — needs locating' : undefined}
             className="rounded-xl border border-outline/60 bg-surface-container p-4 text-left transition-all hover:border-primary/50 hover:shadow-md disabled:opacity-60"
           >
             <div className="flex items-start justify-between gap-2">
@@ -50,7 +52,9 @@ export default function ModelList({ adapters, onSelect, disabled, loadingModelId
                 </div>
               </div>
               <div className="shrink-0">
-                {isSelectedLoaded ? (
+                {isUnavailable ? (
+                  <span className="rounded-full bg-outline/30 px-2 py-0.5 text-[10px] font-medium text-on-surface-variant">Needs locating</span>
+                ) : isSelectedLoaded ? (
                   <span className="text-[10px] font-medium text-green-600">Ready</span>
                 ) : isLoading && downloadProgress ? (
                   <span className="text-[10px] font-medium text-primary">Downloading…</span>

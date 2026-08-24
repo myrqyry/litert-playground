@@ -48,6 +48,7 @@ export const magentaAdapter: ModelAdapter = {
     modelPath: '/models/magenta.tflite',
     tags: ['audio', 'music', 'magenta']
   },
+  disabled: true, // ponytail: google/magenta-realtime on Kaggle only (no browser-fetchable HF mirror) — needs locating
   inputSpecs: INPUT_SPECS,
   outputSpecs: OUTPUT_SPECS,
 

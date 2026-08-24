@@ -26,7 +26,7 @@ export const realesrganAdapter: ModelAdapter = {
   metadata: {
     name: 'Real-ESRGAN x4v3',
     description: 'General image super-resolution (4x upscale)',
-    modelPath: '/models/realesr_general_x4v3.tflite',
+    modelPath: 'https://huggingface.co/litert-community/real-esrgan-x4v3-litert/resolve/main/realesr_general_x4v3.tflite',
     tags: ['vision', 'super-resolution'],
   },
   inputSpecs: INPUT_SPECS,
