@@ -1,4 +1,6 @@
 import type { ModelAdapter } from './types'
+import { Tensor } from '@litertjs/core'
+import { normalizeAndFormatImageData, resizeImageData, tensorToImageData } from '../imageUtils'
 
 export const sam2EncoderAdapter: ModelAdapter = {
   modelId: 'sam2-encoder',
@@ -11,8 +13,22 @@ export const sam2EncoderAdapter: ModelAdapter = {
     { name: 'feat_s1', dtype: 'float32', shape: [1, 64, 128, 128], description: 'FPN feature map s1' },
     { name: 'feat_s0', dtype: 'float32', shape: [1, 32, 256, 256], description: 'FPN feature map s0' },
   ],
-  prepareInputs: () => ({}),
-  parseOutputs: async () => ({}),
+  prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+    const imageData = values['image'] as ImageData
+    if (!imageData) throw new Error('Image data not provided for sam2-encoder')
+    const [, C, H, W] = this.inputSpecs[0].shape
+    const resized = resizeImageData(imageData, W, H)
+    return { image: normalizeAndFormatImageData(resized, [1, C, H, W], { dataFormat: 'NCHW', normalization: 'imagenet' }) }
+  },
+  async parseOutputs(outputs: Record<string, Tensor>): Promise<Record<string, any>> {
+    const result: Record<string, any> = {}
+    for (const spec of this.outputSpecs) {
+      const t = outputs[spec.name]
+      if (!t) throw new Error(`Missing sam2-encoder output: ${spec.name}`)
+      result[spec.name] = await t.data()
+    }
+    return result
+  },
 }
 
 export const sam2DecoderAdapter: ModelAdapter = {
@@ -28,8 +44,39 @@ export const sam2DecoderAdapter: ModelAdapter = {
     { name: 'masks', dtype: 'float32', shape: [1, 3, 256, 256], description: '3 mask predictions' },
     { name: 'iou_predictions', dtype: 'float32', shape: [1, 3], description: 'IoU scores per mask' },
   ],
-  prepareInputs: () => ({}),
-  parseOutputs: async () => ({}),
+  prepareInputs(values: Record<string, any>): Record<string, Tensor> {
+    const out: Record<string, Tensor> = {}
+    for (const spec of this.inputSpecs) {
+      const val = values[spec.name]
+      if (!val) throw new Error(`Missing input for sam2-decoder: ${spec.name}`)
+      if (val instanceof Tensor) {
+        out[spec.name] = val
+      } else if (val instanceof Float32Array) {
+        out[spec.name] = new Tensor(val, spec.shape)
+      } else if (Array.isArray(val)) {
+        out[spec.name] = new Tensor(new Float32Array(val.flat(Infinity) as number[]), spec.shape)
+      } else {
+        throw new Error(`Invalid input type for ${spec.name}: expected Tensor or Float32Array`)
+      }
+    }
+    return out
+  },
+  async parseOutputs(outputs: Record<string, Tensor>): Promise<Record<string, any>> {
+    const masks = outputs['masks']
+    const iou = outputs['iou_predictions']
+    if (!masks || !iou) throw new Error('Missing sam2-decoder outputs')
+    const masksData = await masks.data() as Float32Array
+    const iouData = await iou.data() as Float32Array
+    // masks is [1,3,256,256] — split into 3 separate ImageData masks
+    const plane = 256 * 256
+    const masksOut: ImageData[] = []
+    for (let m = 0; m < 3; m++) {
+      const slice = masksData.slice(m * plane, (m + 1) * plane)
+      const tensor = new Tensor(slice, [1, 1, 256, 256])
+      masksOut.push(await tensorToImageData(tensor, 256, 256))
+    }
+    return { masks: masksOut, iou_predictions: Array.from(iouData) }
+  },
 }
 
 export const sam2Adapters: ModelAdapter[] = [sam2EncoderAdapter, sam2DecoderAdapter]
