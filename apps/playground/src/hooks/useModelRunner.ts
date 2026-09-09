@@ -240,6 +240,14 @@ export function useModelRunner(): UseModelRunnerReturn {
       loadControllerRef.current?.abort()
       const runtime = runtimePromiseRef.current
       runtimePromiseRef.current = null
+      adapterRef.current = null
+      setLoaded(false)
+      setModelInfo(null)
+      setPreflight(null)
+      setOutputs(null)
+      setOutputTensors(null)
+      setError(null)
+      setDownloadProgress(null)
       if (runtime) void runtime.then((context) => context.liteRt.dispose()).catch(() => undefined)
     }
   }, [modelBase])

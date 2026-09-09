@@ -70,6 +70,7 @@ export default function ModelRunner({ adapters, onSelect }: ModelRunnerProps) {
   const [inputValues, setInputValues] = useState<Record<string, unknown>>({})
   const [search, setSearch] = useState('')
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [modelBaseInput, setModelBaseInput] = useState(modelBase)
 
   const handleSelect = async (adapter: ModelAdapter) => {
     if (onSelect && adapter.isPipeline) {
@@ -87,6 +88,8 @@ export default function ModelRunner({ adapters, onSelect }: ModelRunnerProps) {
     setAccelerator(next)
     if (selectedAdapter) void loadModel(selectedAdapter, next)
   }
+
+  const commitModelBase = () => setModelBase(modelBaseInput)
 
   const filtered = search
     ? adapters.filter(a =>
@@ -135,8 +138,10 @@ export default function ModelRunner({ adapters, onSelect }: ModelRunnerProps) {
           <input
             type="url"
             placeholder="https://your-model-server.com/"
-            value={modelBase}
-            onChange={e => setModelBase(e.target.value)}
+            value={modelBaseInput}
+            onChange={e => setModelBaseInput(e.target.value)}
+            onBlur={commitModelBase}
+            onKeyDown={e => { if (e.key === 'Enter') commitModelBase() }}
             className="w-full rounded-lg border border-outline bg-surface-container px-4 py-2 text-sm text-on-surface transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none"
           />
         </div>
